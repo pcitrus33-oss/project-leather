@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import Globe from '../components/Globe';
 import UnlockModal from '../components/UnlockModal';
@@ -7,6 +7,7 @@ import { api, type UnlockedCountry, type UploadResult } from '../lib/api';
 import type { Country } from '../lib/countries';
 import { celebrate } from '../lib/celebrate';
 import Flag from '../components/Flag';
+import PlaneIcon from '../components/PlaneIcon';
 import './GlobePage.css';
 
 export default function GlobePage() {
@@ -58,7 +59,10 @@ export default function GlobePage() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 300, damping: 18 }}
         >
-          <span className="globe-logo-icon">🌍</span> My Globe
+          Project Leather
+          <span className="globe-logo-icon">
+            <PlaneIcon />
+          </span>
         </motion.h1>
         <motion.div
           className="globe-stats"
@@ -68,6 +72,9 @@ export default function GlobePage() {
         >
           <span className="chip">🗺️ {unlocked.length} {unlocked.length === 1 ? 'country' : 'countries'}</span>
           <span className="chip">📸 {photoTotal} photos</span>
+          <Link to="/settings" className="btn btn-icon" title="Settings" aria-label="Settings">
+            ⚙️
+          </Link>
         </motion.div>
       </header>
 

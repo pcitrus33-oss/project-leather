@@ -23,19 +23,42 @@
   gap: 12px;
   padding: 18px 24px;
   pointer-events: none;
+  z-index: 5; /* above globe city labels */
 }
 .globe-header > * {
   pointer-events: auto;
 }
 
 .globe-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
   font-size: clamp(1.8rem, 4vw, 2.6rem);
   color: var(--ink);
   text-shadow: 3px 3px 0 white;
 }
 .globe-logo-icon {
-  display: inline-block;
-  animation: wobble 3s ease-in-out infinite;
+  display: inline-flex;
+  width: 1.6em;
+  animation: fly 3.2s ease-in-out infinite;
+}
+.globe-logo-icon svg {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(2px 3px 0 rgba(43, 58, 103, 0.15));
+}
+@keyframes fly {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(2deg);
+  }
+}
+
+.globe-stats .btn-icon {
+  font-size: 1.1rem;
 }
 
 .globe-stats {
@@ -46,12 +69,14 @@
 
 .globe-actions {
   position: absolute;
+  z-index: 5;
   bottom: 28px;
   left: 50%;
   translate: -50% 0;
 }
 
 .globe-hint {
+  z-index: 5;
   position: absolute;
   bottom: 112px;
   left: 50%;
@@ -63,6 +88,7 @@
 }
 
 .globe-alert {
+  z-index: 5;
   position: absolute;
   top: 90px;
   left: 50%;

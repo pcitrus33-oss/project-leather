@@ -1,5 +1,5 @@
 {
-  "name": "my-globe",
+  "name": "project-leather",
   "private": true,
   "workspaces": [
     "client",
