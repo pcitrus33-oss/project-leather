@@ -1,3 +1,5 @@
+import type { ThemeId } from './themes';
+
 export interface Photo {
   id: string;
   iso: string;
@@ -20,7 +22,12 @@ export interface UnlockedCountry {
 export interface CountryPhotos {
   iso: string;
   coverId: string | null;
+  theme: ThemeId;
   photos: Photo[];
+}
+
+export interface Settings {
+  defaultTheme: ThemeId;
 }
 
 export interface UploadResult {
@@ -52,6 +59,12 @@ export const api = {
   setCover: (iso: string, photoId: string) => request<{ coverId: string }>(`/api/countries/${iso}/cover`, json('PUT', { photoId })),
 
   setCaption: (id: string, caption: string) => request<{ ok: true }>(`/api/photos/${id}`, json('PATCH', { caption })),
+
+  setTheme: (iso: string, theme: ThemeId) => request<{ theme: ThemeId }>(`/api/countries/${iso}/theme`, json('PUT', { theme })),
+
+  settings: () => request<Settings>('/api/settings'),
+
+  saveSettings: (settings: Settings) => request<Settings>('/api/settings', json('PUT', settings)),
 
   deletePhoto: (id: string) => request<{ relocked: boolean }>(`/api/photos/${id}`, { method: 'DELETE' }),
 

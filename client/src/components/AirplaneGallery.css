@@ -1,0 +1,229 @@
+/* ---------- Cabin wall ---------- */
+.cabin {
+  --cabin-wall: #f7f2e8;
+  --cabin-trim: #e7dfcf;
+  --bezel: #fdfbf6;
+  --window-r: 44% / 34%; /* the rounded-rectangle airplane window shape */
+  --bezel-pad: 18px;
+
+  position: relative;
+  padding: 0 40px 44px;
+  border: var(--border);
+  border-radius: 40px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(33.333% - 1.5px),
+      rgba(43, 58, 103, 0.07) calc(33.333% - 1.5px),
+      rgba(43, 58, 103, 0.07) 33.333%
+    ),
+    var(--cabin-wall);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.cabin-bins {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 0 -40px 40px;
+  padding: 14px 40px 12px;
+  border-bottom: var(--border);
+  background: var(--cabin-trim);
+}
+.cabin-bin {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+.cabin-light {
+  width: 16px;
+  height: 16px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 10px 2px rgba(255, 211, 110, 0.8);
+}
+
+.cabin-windows {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 44px 40px;
+}
+
+/* ---------- Windows ---------- */
+.plane-window {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: var(--border);
+  border-radius: var(--window-r);
+  background: linear-gradient(160deg, white 0%, var(--bezel) 50%, #ebe5d8 100%);
+  box-shadow:
+    inset 0 -6px 0 rgba(43, 58, 103, 0.08),
+    var(--shadow);
+}
+.plane-window.has-photo {
+  cursor: zoom-in;
+  transition: transform 0.15s ease;
+}
+.plane-window.has-photo:hover {
+  transform: translateY(-4px) rotate(-0.6deg);
+}
+
+.plane-window-pane {
+  position: absolute;
+  inset: var(--bezel-pad);
+  overflow: hidden;
+  border: var(--border);
+  border-radius: var(--window-r);
+  background: linear-gradient(180deg, #5fbcf2 0%, #a8dfff 70%, #d8f2ff 100%);
+  box-shadow: inset 0 4px 10px rgba(43, 58, 103, 0.25);
+}
+.plane-window-pane img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Diagonal shine across the glass */
+.plane-window-glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.38) 0 16%,
+    transparent 16% 26%,
+    rgba(255, 255, 255, 0.2) 26% 31%,
+    transparent 31%
+  );
+}
+
+/* Pulled-up window shade with a little handle; sits inside the pane so it follows the window's curve */
+.plane-window-shade {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 11%;
+  border-bottom: var(--border);
+  background: repeating-linear-gradient(180deg, #fbf8f1 0 6px, #efe9dc 6px 8px);
+  transition: height 0.25s ease;
+}
+.plane-window-shade::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  translate: -50% 0;
+  width: 26px;
+  height: 10px;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--pink);
+}
+.plane-window.has-photo:hover .plane-window-shade {
+  height: 5%;
+}
+
+/* ---------- Sky for empty windows ---------- */
+.sky-cloud {
+  position: absolute;
+  left: 0;
+  width: 46%;
+  height: 13%;
+  border-radius: 999px;
+  background: white;
+  opacity: 0.95;
+  animation: cloud-drift 22s linear infinite;
+}
+.sky-cloud::before,
+.sky-cloud::after {
+  content: '';
+  position: absolute;
+  bottom: 30%;
+  border-radius: 50%;
+  background: white;
+}
+.sky-cloud::before {
+  left: 16%;
+  width: 40%;
+  aspect-ratio: 1;
+}
+.sky-cloud::after {
+  left: 44%;
+  width: 30%;
+  aspect-ratio: 1;
+}
+.sky-cloud.is-small {
+  width: 30%;
+  height: 9%;
+  opacity: 0.8;
+  animation-duration: 30s;
+}
+@keyframes cloud-drift {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(330%);
+  }
+}
+
+/* ---------- Seat labels ---------- */
+.cabin-seat-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  min-height: 28px;
+  font-weight: 600;
+}
+.cabin-seat-number {
+  flex: none;
+  padding: 1px 10px;
+  border: 2.5px solid var(--ink);
+  border-radius: 8px;
+  background: var(--paper);
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+.cabin-seat-caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .cabin {
+    --bezel-pad: 9px;
+    padding: 0 16px 24px;
+    border-radius: 26px;
+  }
+  .cabin-bins {
+    margin: 0 -16px 24px;
+    padding: 10px 16px;
+  }
+  .cabin-windows {
+    gap: 22px 14px;
+  }
+  .plane-window-shade::after {
+    width: 18px;
+    height: 8px;
+    bottom: -7px;
+  }
+  .cabin-seat-label {
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+  }
+  .cabin-seat-caption {
+    max-width: 100%;
+  }
+}

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import multer from 'multer';
-import { db, transaction, type PhotoRow } from './db.js';
+import { db, transaction, defaultTheme, isThemeId, setSetting, THEME_IDS, type PhotoRow } from './db.js';
 import { processUpload, deleteImageFiles } from './images.js';
 
 const upload = multer({
@@ -33,11 +33,10 @@ function photosFor(iso: string) {
   return rows.map(toPhoto);
 }
 
-function coverIdFor(iso: string): string | null {
-  const row = db.prepare('SELECT cover_photo_id FROM countries WHERE iso = ?').get(iso) as
-    | { cover_photo_id: string | null }
+function countryRow(iso: string) {
+  return db.prepare('SELECT cover_photo_id, theme FROM countries WHERE iso = ?').get(iso) as
+    | { cover_photo_id: string | null; theme: string }
     | undefined;
-  return row?.cover_photo_id ?? null;
 }
 
 function validIso(req: Request, res: Response, next: NextFunction) {
@@ -84,7 +83,9 @@ api.get('/countries', (_req, res) => {
 
 api.get('/countries/:iso/photos', validIso, (req, res) => {
   const iso = String(req.params.iso);
-  res.json({ iso, coverId: coverIdFor(iso), photos: photosFor(iso) });
+  const row = countryRow(iso);
+  // Locked countries report the theme they would get if unlocked now.
+  res.json({ iso, coverId: row?.cover_photo_id ?? null, theme: row?.theme ?? defaultTheme(), photos: photosFor(iso) });
 });
 
 api.post('/countries/:iso/photos', validIso, upload.array('photos'), async (req, res) => {
@@ -114,7 +115,9 @@ api.post('/countries/:iso/photos', validIso, upload.array('photos'), async (req,
 
   const newlyUnlocked = transaction(() => {
     const now = new Date().toISOString();
-    const inserted = db.prepare('INSERT OR IGNORE INTO countries (iso, unlocked_at) VALUES (?, ?)').run(iso, now);
+    const inserted = db
+      .prepare('INSERT OR IGNORE INTO countries (iso, unlocked_at, theme) VALUES (?, ?, ?)')
+      .run(iso, now, defaultTheme());
     const { max } = db
       .prepare('SELECT COALESCE(MAX(sort_order), -1) AS max FROM photos WHERE iso = ?')
       .get(iso) as { max: number };
@@ -153,6 +156,35 @@ api.put('/countries/:iso/cover', validIso, (req, res) => {
   }
   db.prepare('UPDATE countries SET cover_photo_id = ? WHERE iso = ?').run(photoId, iso);
   res.json({ coverId: photoId });
+});
+
+api.put('/countries/:iso/theme', validIso, (req, res) => {
+  const iso = String(req.params.iso);
+  const theme = req.body?.theme;
+  if (!isThemeId(theme)) {
+    res.status(400).json({ error: `theme must be one of: ${THEME_IDS.join(', ')}` });
+    return;
+  }
+  const result = db.prepare('UPDATE countries SET theme = ? WHERE iso = ?').run(theme, iso);
+  if (result.changes === 0) {
+    res.status(404).json({ error: 'Unlock this country before choosing its theme' });
+    return;
+  }
+  res.json({ theme });
+});
+
+api.get('/settings', (_req, res) => {
+  res.json({ defaultTheme: defaultTheme() });
+});
+
+api.put('/settings', (req, res) => {
+  const theme = req.body?.defaultTheme;
+  if (!isThemeId(theme)) {
+    res.status(400).json({ error: `defaultTheme must be one of: ${THEME_IDS.join(', ')}` });
+    return;
+  }
+  setSetting('default_theme', theme);
+  res.json({ defaultTheme: theme });
 });
 
 api.patch('/photos/:id', (req, res) => {
