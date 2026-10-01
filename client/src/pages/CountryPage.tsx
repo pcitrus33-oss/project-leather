@@ -8,10 +8,13 @@ import 'yet-another-react-lightbox/plugins/captions.css';
 import { api, type Photo, type UploadResult } from '../lib/api';
 import { getCountry } from '../lib/countries';
 import { celebrate } from '../lib/celebrate';
+import type { ThemeId } from '../lib/themes';
 import CountrySilhouette from '../components/CountrySilhouette';
 import UnlockModal from '../components/UnlockModal';
 import { EditablePhotoGrid, PhotoGrid } from '../components/PhotoGrid';
 import Flag from '../components/Flag';
+import AirplaneGallery from '../components/AirplaneGallery';
+import ThemePicker from '../components/ThemePicker';
 import './CountryPage.css';
 
 interface Draft {
@@ -27,6 +30,7 @@ export default function CountryPage() {
 
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [coverId, setCoverId] = useState<string | null>(null);
+  const [theme, setTheme] = useState<ThemeId>('classic');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(-1);
@@ -42,6 +46,7 @@ export default function CountryPage() {
       .then((d) => {
         setPhotos(d.photos);
         setCoverId(d.coverId);
+        setTheme(d.theme);
         setError(null);
       })
       .catch((e: Error) => setError(e.message))
@@ -63,6 +68,18 @@ export default function CountryPage() {
     // Use real history when we came from inside the app, so browser Back/Forward stay in sync.
     if ((window.history.state?.idx ?? 0) > 0) navigate(-1);
     else navigate('/');
+  };
+
+  const changeTheme = async (next: ThemeId) => {
+    if (!country) return;
+    const previous = theme;
+    setTheme(next);
+    try {
+      await api.setTheme(country.iso, next);
+    } catch (e) {
+      setTheme(previous);
+      alert(`Couldn't change the theme: ${(e as Error).message}`);
+    }
   };
 
   const startEditing = () => setDraft({ photos, captions: {}, coverId: effectiveCover });
@@ -148,7 +165,7 @@ export default function CountryPage() {
 
   return (
     <motion.div
-      className="country-page"
+      className={`country-page theme-${theme}`}
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 24 }}
@@ -184,6 +201,7 @@ export default function CountryPage() {
             </>
           ) : (
             <>
+              {photos.length > 0 && <ThemePicker value={theme} onChange={changeTheme} />}
               {photos.length > 0 && (
                 <button className="btn" onClick={startEditing}>
                   ✏️ {photos.length > 1 ? 'Edit layout' : 'Edit'}
@@ -228,6 +246,8 @@ export default function CountryPage() {
             onCover={(id) => setDraft({ ...draft, coverId: id })}
             onDelete={deletePhoto}
           />
+        ) : photos.length === 0 ? null : theme === 'airplane' ? (
+          <AirplaneGallery photos={photos} onOpen={setLightboxIndex} />
         ) : (
           <PhotoGrid photos={photos} coverId={effectiveCover} onOpen={setLightboxIndex} />
         )}
