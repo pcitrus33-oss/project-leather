@@ -1,0 +1,80 @@
+/* Hover tooltip (globe.gl renders this HTML string) */
+.globe-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  font-family: var(--font);
+  font-size: 15px;
+  white-space: nowrap;
+}
+.globe-tip span {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* Photo pop-ups pinned on unlocked countries */
+.photo-bubble-anchor {
+  transition: opacity 0.25s;
+}
+.photo-bubble {
+  position: relative;
+  display: block;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  margin-top: -42px; /* sit above the country, tail pointing down at it */
+  border: var(--border);
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  animation: float 3s ease-in-out infinite;
+  transition: width 0.15s, height 0.15s, margin 0.15s;
+}
+.photo-bubble img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.photo-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-top: 10px solid var(--ink);
+  border-bottom: 0;
+}
+.photo-bubble:hover {
+  width: 74px;
+  height: 74px;
+  margin-top: -58px;
+  z-index: 2;
+}
+.photo-bubble-count {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--pink);
+  color: white;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}

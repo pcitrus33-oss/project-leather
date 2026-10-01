@@ -1,0 +1,172 @@
+:root {
+  --ink: #2b3a67;
+  --ink-soft: #5b6a96;
+  --paper: #fffaf3;
+  --sky-top: #ffe6f2;
+  --sky-bottom: #d9f1ff;
+  --ocean: #8fd7f7;
+  --land-locked: #c8ced8;
+  --land-unlocked: #ffffff;
+  --pink: #ff7eb6;
+  --pink-dark: #e85d9a;
+  --yellow: #ffd36e;
+  --mint: #7ee0c3;
+  --lilac: #b9a6ff;
+  --danger: #ff6b6b;
+  --radius: 22px;
+  --shadow: 0 6px 0 rgba(43, 58, 103, 0.18);
+  --shadow-lg: 0 10px 0 rgba(43, 58, 103, 0.15), 0 20px 40px rgba(43, 58, 103, 0.15);
+  --border: 3px solid var(--ink);
+  --font: 'Fredoka Variable', 'Baloo 2', ui-rounded, system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%) fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- Chunky cartoon buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.6em 1.2em;
+  border: var(--border);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.15s;
+  white-space: nowrap;
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+.btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 rgba(43, 58, 103, 0.18);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-pink {
+  background: var(--pink);
+  color: white;
+}
+.btn-yellow {
+  background: var(--yellow);
+}
+.btn-mint {
+  background: var(--mint);
+}
+.btn-big {
+  font-size: 1.15rem;
+  padding: 0.75em 1.5em;
+}
+.btn-icon {
+  padding: 0.45em;
+  width: 2.4em;
+  height: 2.4em;
+  justify-content: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.35em 0.9em;
+  border: var(--border);
+  border-radius: 999px;
+  background: var(--paper);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+.card {
+  background: var(--paper);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+.input {
+  width: 100%;
+  padding: 0.6em 1em;
+  border: var(--border);
+  border-radius: 14px;
+  background: white;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--pink);
+}
+
+.title {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+@keyframes wobble {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Flag images (flag-icons) styled as little cartoon stickers */
+.flag.fi {
+  width: 1.33em;
+  line-height: 1em;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  vertical-align: -0.1em;
+  background-size: cover;
+}

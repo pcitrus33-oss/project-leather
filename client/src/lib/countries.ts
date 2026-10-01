@@ -1,0 +1,56 @@
+import { feature } from 'topojson-client';
+import { geoArea, geoCentroid } from 'd3-geo';
+import isoCountries from 'i18n-iso-countries';
+import type { Topology, GeometryCollection } from 'topojson-specification';
+import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
+import topology from 'world-atlas/countries-50m.json';
+
+export interface Country {
+  /** ISO 3166 alpha-3 code ("JPN"), or a made-up "X-..." key for the few shapes without one. */
+  iso: string;
+  name: string;
+  /** ISO alpha-2 code, used for the flag image. */
+  alpha2?: string;
+  feature: Feature<Polygon | MultiPolygon>;
+  /** Where the photo bubble sits: the centre of the country's largest landmass. */
+  lat: number;
+  lng: number;
+}
+
+// Shapes Natural Earth ships without an ISO numeric code, or sharing one with another shape.
+const SPECIAL: Record<string, { iso: string; alpha2?: string }> = {
+  Kosovo: { iso: 'XKX', alpha2: 'XK' },
+  'Ashmore and Cartier Is.': { iso: 'X-ASHMORE-AND-CARTIER', alpha2: 'AU' },
+};
+
+/** Flag as an HTML string, for places that need raw HTML (the globe tooltip). Windows can't draw flag emoji, so these are SVGs. */
+export function flagHtml(c: Country) {
+  return c.alpha2 ? `<span class="fi fi-${c.alpha2.toLowerCase()} flag"></span>` : '<span class="flag">🏳️</span>';
+}
+
+function mainLandmass(f: Feature<Polygon | MultiPolygon>): Feature<Polygon> {
+  if (f.geometry.type === 'Polygon') return f as Feature<Polygon>;
+  const parts = f.geometry.coordinates.map(
+    (coordinates): Feature<Polygon> => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates } }),
+  );
+  return parts.reduce((a, b) => (geoArea(b) > geoArea(a) ? b : a));
+}
+
+const topo = topology as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
+const collection = feature(topo, topo.objects.countries) as FeatureCollection<Polygon | MultiPolygon, { name: string }>;
+
+export const COUNTRIES: Country[] = collection.features
+  .map((f) => {
+    const name = f.properties.name;
+    const id = f.id == null ? undefined : String(f.id);
+    const special = SPECIAL[name];
+    const iso = special?.iso ?? (id && isoCountries.numericToAlpha3(id)) ?? `X-${name.replace(/[^A-Za-z]+/g, '-').toUpperCase()}`;
+    const alpha2 = special?.alpha2 ?? (id ? isoCountries.numericToAlpha2(id) : undefined);
+    const [lng, lat] = geoCentroid(mainLandmass(f));
+    return { iso, name, alpha2, feature: f, lat, lng };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+const BY_ISO = new Map(COUNTRIES.map((c) => [c.iso, c]));
+
+export const getCountry = (iso: string | undefined) => (iso ? BY_ISO.get(iso) : undefined);

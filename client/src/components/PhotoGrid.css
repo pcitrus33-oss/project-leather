@@ -1,0 +1,119 @@
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 26px;
+}
+
+/* ---------- View mode: polaroid tiles ---------- */
+.photo-tile {
+  position: relative;
+  display: block;
+  padding: 10px 10px 12px;
+  border: var(--border);
+  border-radius: 18px;
+  background: white;
+  box-shadow: var(--shadow);
+  cursor: zoom-in;
+  text-align: left;
+}
+.photo-tile img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #eef1f7;
+}
+.photo-caption {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.photo-cover-badge {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+  font-size: 16px;
+}
+
+/* ---------- Edit mode ---------- */
+.edit-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 3px dashed var(--ink-soft);
+  border-radius: 18px;
+  background: white;
+  touch-action: manipulation;
+}
+.edit-tile.is-dragging {
+  position: relative;
+  z-index: 10;
+  border-style: solid;
+  border-color: var(--pink);
+  box-shadow: var(--shadow-lg);
+  rotate: 3deg;
+}
+.edit-tile.is-busy {
+  opacity: 0.5;
+}
+.edit-tile-image {
+  position: relative;
+  cursor: grab;
+  touch-action: none;
+}
+.edit-tile.is-dragging .edit-tile-image {
+  cursor: grabbing;
+}
+.edit-tile-image img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  user-select: none;
+}
+.edit-tile-grip {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: white;
+  font-size: 16px;
+}
+.edit-tile-tools {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.edit-tile-tools .btn {
+  box-shadow: 0 3px 0 rgba(43, 58, 103, 0.18);
+}
+.edit-tile-caption {
+  padding: 0.45em 0.8em;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 600px) {
+  .photo-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
