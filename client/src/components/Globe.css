@@ -78,3 +78,53 @@
   line-height: 20px;
   text-align: center;
 }
+
+/* ---------- Cities ---------- */
+.city-marker {
+  position: relative;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.city-dot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+}
+.city-marker.is-capital .city-dot {
+  width: auto;
+  height: auto;
+  border: none;
+  background: none;
+  color: var(--pink);
+  font-size: 15px;
+  line-height: 1;
+  -webkit-text-stroke: 1.2px var(--ink);
+  paint-order: stroke fill;
+}
+.city-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  translate: -50% 2px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 250, 243, 0.85);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.is-capital .city-label {
+  font-weight: 700;
+  font-size: 12px;
+}
+.show-capital-names .is-capital .city-label,
+.show-city-names .city-label {
+  opacity: 1;
+}

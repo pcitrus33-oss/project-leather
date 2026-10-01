@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GlobeGL, { type GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
+import cities from '../data/cities.json';
 import type { UnlockedCountry } from '../lib/api';
 import './Globe.css';
 
@@ -25,6 +26,23 @@ const COLORS = {
 };
 
 // Narrow (phone) screens need the camera further out to fit the whole globe.
+type Marker =
+  | { kind: 'city'; lat: number; lng: number; name: string; capital: boolean }
+  | { kind: 'bubble'; lat: number; lng: number; country: Country; count: number; coverUrl: string };
+
+const CITY_MARKERS: Marker[] = cities.map((c) => ({
+  kind: 'city',
+  lat: c.lat,
+  lng: c.lng,
+  name: c.name,
+  capital: 'capital' in c && !!c.capital,
+}));
+// Capital names appear first; other city names only once zoomed closer, to limit overlap.
+const CAPITAL_NAMES_ALTITUDE = 1.3;
+const CITY_NAMES_ALTITUDE = 0.7;
+// Cities sit just above raised (unlocked) countries; bubbles float higher.
+const markerAltitude = (d: object) => ((d as Marker).kind === 'city' ? 0.025 : 0.05);
+
 const DEFAULT_POV = { lat: 25, lng: 10, altitude: window.innerWidth < 600 ? 3.8 : 2.3 };
 const FLY_MS = 900;
 const AUTO_SPIN_RESUME_MS = 6000;
@@ -122,6 +140,14 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     }, AUTO_SPIN_RESUME_MS);
   }, []);
 
+  // City names fade in when zoomed close; toggled on the DOM directly to avoid re-rendering the globe.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const handleZoom = useCallback((pov: { altitude: number }) => {
+    const cl = wrapperRef.current?.classList;
+    cl?.toggle('show-capital-names', pov.altitude < CAPITAL_NAMES_ALTITUDE);
+    cl?.toggle('show-city-names', pov.altitude < CITY_NAMES_ALTITUDE);
+  }, []);
+
   const handleReady = useCallback(() => {
     const globe = globeRef.current;
     if (!globe) return;
@@ -133,6 +159,7 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     controls.maxDistance = globe.getGlobeRadius() * 5;
     controls.addEventListener('start', pauseSpin);
     globe.pointOfView(savedPov ?? DEFAULT_POV, 0);
+    handleZoom(globe.pointOfView());
 
     const clouds = makeClouds(globe.getGlobeRadius());
     clouds.name = 'clouds';
@@ -144,7 +171,7 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     };
     drift();
     clouds.userData.stop = () => cancelAnimationFrame(frame);
-  }, [pauseSpin]);
+  }, [pauseSpin, handleZoom]);
 
   useEffect(
     () => () => {
@@ -157,83 +184,107 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     [],
   );
 
-  const bubbles = useMemo(
-    () =>
-      unlocked.flatMap((u) => {
+  // Cities and photo bubbles share globe.gl's single HTML-element layer.
+  const markers = useMemo<Marker[]>(
+    () => [
+      ...CITY_MARKERS,
+      ...unlocked.flatMap((u): Marker[] => {
         const c = getCountry(u.iso);
-        return c ? [{ ...u, country: c }] : [];
+        return c ? [{ kind: 'bubble', lat: c.lat, lng: c.lng, country: c, count: u.count, coverUrl: u.coverUrl }] : [];
       }),
+    ],
     [unlocked],
   );
 
-  return (
-    <GlobeGL
-      ref={globeRef}
-      width={size.w}
-      height={size.h}
-      backgroundColor="rgba(0,0,0,0)"
-      globeMaterial={globeMaterial}
-      showAtmosphere
-      atmosphereColor="#c9f0ff"
-      atmosphereAltitude={0.22}
-      onGlobeReady={handleReady}
-      polygonsData={COUNTRIES}
-      // The library's own GeoJSON typing is too narrow for MultiPolygons.
-      polygonGeoJsonGeometry={(d) => (d as Country).feature.geometry as never}
-      polygonCapColor={(d) => {
-        const c = d as Country;
-        if (c === hovered) return isUnlocked(c) ? COLORS.hoverUnlocked : COLORS.hoverLocked;
-        return isUnlocked(c) ? COLORS.unlocked : COLORS.locked;
-      }}
-      polygonSideColor={(d) => (isUnlocked(d as Country) ? COLORS.unlockedSide : COLORS.lockedSide)}
-      polygonStrokeColor={() => COLORS.outline}
-      polygonAltitude={(d) => {
-        const c = d as Country;
-        if (c === hovered) return 0.04;
-        return isUnlocked(c) ? 0.018 : 0.007;
-      }}
-      polygonsTransitionDuration={250}
-      polygonLabel={(d) => {
-        const c = d as Country;
-        const u = unlocked.find((x) => x.iso === c.iso);
-        const sub = u ? `${u.count} photo${u.count === 1 ? '' : 's'} · click to open` : 'locked · click to unlock';
-        return `<div class="globe-tip"><b>${flagHtml(c)} ${c.name}</b><span>${sub}</span></div>`;
-      }}
-      onPolygonHover={(d) => {
-        setHovered((d as Country) ?? null);
-        if (d) pauseSpin();
-      }}
-      onPolygonClick={(d, event) => {
-        const c = d as Country;
-        if (isUnlocked(c)) flyTo(c);
-        else onLockedClick(c, event.clientX, event.clientY);
-      }}
-      htmlElementsData={bubbles}
-      htmlLat={(d) => (d as (typeof bubbles)[number]).country.lat}
-      htmlLng={(d) => (d as (typeof bubbles)[number]).country.lng}
-      htmlAltitude={0.05}
-      htmlElement={(d) => {
-        const b = d as (typeof bubbles)[number];
-        // The globe positions `el` with its own CSS transform, so animations live on the inner button.
-        const el = document.createElement('div');
-        el.className = 'photo-bubble-anchor';
-        const btn = document.createElement('button');
-        btn.className = 'photo-bubble';
-        btn.title = `${b.country.name} — ${b.count} photo${b.count === 1 ? '' : 's'}`;
-        btn.innerHTML = `<img src="${b.coverUrl}" alt="" draggable="false" /><span class="photo-bubble-count">${b.count}</span>`;
-        btn.style.animationDelay = `${Math.random() * -3}s`;
-        btn.onclick = (e) => {
-          e.stopPropagation();
-          flyRef.current(b.country);
-        };
-        btn.onpointerenter = pauseSpin;
-        el.appendChild(btn);
+  // Stable so globe.gl doesn't rebuild ~450 elements on every hover re-render.
+  const buildMarker = useCallback(
+    (d: object) => {
+      const m = d as Marker;
+      // The globe positions `el` with its own CSS transform, so animations live on inner elements.
+      const el = document.createElement('div');
+      if (m.kind === 'city') {
+        el.className = `city-marker ${m.capital ? 'is-capital' : ''}`;
+        const dot = document.createElement('span');
+        dot.className = 'city-dot';
+        dot.textContent = m.capital ? '★' : '';
+        const label = document.createElement('span');
+        label.className = 'city-label';
+        label.textContent = m.name;
+        el.append(dot, label);
         return el;
-      }}
-      htmlElementVisibilityModifier={(el, visible) => {
-        el.style.opacity = visible ? '1' : '0';
-        el.style.pointerEvents = visible ? 'auto' : 'none';
-      }}
-    />
+      }
+      el.className = 'photo-bubble-anchor';
+      const btn = document.createElement('button');
+      btn.className = 'photo-bubble';
+      btn.title = `${m.country.name} — ${m.count} photo${m.count === 1 ? '' : 's'}`;
+      btn.innerHTML = `<img src="${m.coverUrl}" alt="" draggable="false" /><span class="photo-bubble-count">${m.count}</span>`;
+      btn.style.animationDelay = `${Math.random() * -3}s`;
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        flyRef.current(m.country);
+      };
+      btn.onpointerenter = pauseSpin;
+      el.appendChild(btn);
+      return el;
+    },
+    [pauseSpin],
+  );
+
+  return (
+    <div ref={wrapperRef} className="globe-wrapper">
+      <GlobeGL
+        ref={globeRef}
+        width={size.w}
+        height={size.h}
+        backgroundColor="rgba(0,0,0,0)"
+        globeMaterial={globeMaterial}
+        showAtmosphere
+        atmosphereColor="#c9f0ff"
+        atmosphereAltitude={0.22}
+        onGlobeReady={handleReady}
+        polygonsData={COUNTRIES}
+        // The library's own GeoJSON typing is too narrow for MultiPolygons.
+        polygonGeoJsonGeometry={(d) => (d as Country).feature.geometry as never}
+        polygonCapColor={(d) => {
+          const c = d as Country;
+          if (c === hovered) return isUnlocked(c) ? COLORS.hoverUnlocked : COLORS.hoverLocked;
+          return isUnlocked(c) ? COLORS.unlocked : COLORS.locked;
+        }}
+        polygonSideColor={(d) => (isUnlocked(d as Country) ? COLORS.unlockedSide : COLORS.lockedSide)}
+        polygonStrokeColor={() => COLORS.outline}
+        polygonAltitude={(d) => {
+          const c = d as Country;
+          if (c === hovered) return 0.04;
+          return isUnlocked(c) ? 0.018 : 0.007;
+        }}
+        polygonsTransitionDuration={250}
+        polygonLabel={(d) => {
+          const c = d as Country;
+          const u = unlocked.find((x) => x.iso === c.iso);
+          const sub = u ? `${u.count} photo${u.count === 1 ? '' : 's'} · click to open` : 'locked · click to unlock';
+          return `<div class="globe-tip"><b>${flagHtml(c)} ${c.name}</b><span>${sub}</span></div>`;
+        }}
+        onPolygonHover={(d) => {
+          setHovered((d as Country) ?? null);
+          if (d) pauseSpin();
+        }}
+        onPolygonClick={(d, event) => {
+          const c = d as Country;
+          if (isUnlocked(c)) flyTo(c);
+          else onLockedClick(c, event.clientX, event.clientY);
+        }}
+        onZoom={handleZoom}
+        htmlElementsData={markers}
+        htmlLat="lat"
+        htmlLng="lng"
+        htmlAltitude={markerAltitude}
+        htmlElement={buildMarker}
+        htmlElementVisibilityModifier={(el, visible) => {
+          el.style.opacity = visible ? '1' : '0';
+          // Cities are decoration: clicks pass through them to the country underneath.
+          if (el.classList.contains('photo-bubble-anchor')) el.style.pointerEvents = visible ? 'auto' : 'none';
+        }}
+      />
+    </div>
   );
 }
