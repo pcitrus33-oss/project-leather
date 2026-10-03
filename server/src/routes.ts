@@ -23,7 +23,23 @@ function toPhoto(row: PhotoRow) {
     thumbUrl: `/uploads/thumb/${row.id}.jpg`,
     webUrl: `/uploads/web/${row.id}.jpg`,
     originalUrl: `/uploads/original/${row.id}${row.original_ext}`,
+    location: row.lat == null || row.lng == null ? null : { lat: row.lat, lng: row.lng, name: row.place ?? '' },
   };
+}
+
+type Location = { lat: number; lng: number; name: string };
+
+/** undefined = not given, null = clear it, otherwise a validated place; throws on bad input. */
+function parseLocation(raw: unknown): Location | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  const { lat, lng, name } = raw as Record<string, unknown>;
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (!(Math.abs(la) <= 90 && Math.abs(ln) <= 180) || typeof name !== 'string' || name.length > 300) {
+    throw new Error('location needs lat (-90..90), lng (-180..180) and a name');
+  }
+  return { lat: la, lng: ln, name: name.trim() };
 }
 
 function photosFor(iso: string) {
@@ -49,7 +65,10 @@ function validIso(req: Request, res: Response, next: NextFunction) {
 
 export const api = Router();
 
-/** Every unlocked country with its photo count and cover thumbnail (drives the globe). */
+/**
+ * Every unlocked country (drives the globe): photo count, cover thumbnail, how many photos have no
+ * place yet (shown as one bubble at the country's centre), and one pin per distinct place.
+ */
 api.get('/countries', (_req, res) => {
   const rows = db
     .prepare(
@@ -67,15 +86,31 @@ api.get('/countries', (_req, res) => {
     first_id: string;
   }[];
 
+  const placed = db
+    .prepare('SELECT id, iso, lat, lng, place FROM photos WHERE lat IS NOT NULL ORDER BY sort_order, created_at')
+    .all() as { id: string; iso: string; lat: number; lng: number; place: string | null }[];
+  // Photos tagged with the same search result share one pin.
+  const pins = new Map<string, { iso: string; lat: number; lng: number; name: string; count: number; thumbUrl: string }>();
+  for (const p of placed) {
+    const key = `${p.iso}|${p.lat.toFixed(3)}|${p.lng.toFixed(3)}`;
+    const pin = pins.get(key);
+    if (pin) pin.count++;
+    else pins.set(key, { iso: p.iso, lat: p.lat, lng: p.lng, name: p.place ?? '', count: 1, thumbUrl: `/uploads/thumb/${p.id}.jpg` });
+  }
+  const pinList = [...pins.values()];
+
   res.json(
     rows.map((r) => {
       const coverId = r.cover_photo_id ?? r.first_id;
+      const countryPins = pinList.filter((p) => p.iso === r.iso);
       return {
         iso: r.iso,
         count: r.count,
         unlockedAt: r.unlocked_at,
         coverId,
         coverUrl: `/uploads/thumb/${coverId}.jpg`,
+        unplacedCount: r.count - countryPins.reduce((n, p) => n + p.count, 0),
+        pins: countryPins.map(({ lat, lng, name, count, thumbUrl }) => ({ lat, lng, name, count, thumbUrl })),
       };
     }),
   );
@@ -93,6 +128,14 @@ api.post('/countries/:iso/photos', validIso, upload.array('photos'), async (req,
   const files = (req.files as Express.Multer.File[] | undefined) ?? [];
   if (files.length === 0) {
     res.status(400).json({ error: 'No image files received' });
+    return;
+  }
+  // Optional place for the whole batch, sent as form fields.
+  let location: Location | null | undefined;
+  try {
+    location = req.body?.lat ? parseLocation({ lat: req.body.lat, lng: req.body.lng, name: req.body.place ?? '' }) : null;
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
     return;
   }
 
@@ -122,9 +165,12 @@ api.post('/countries/:iso/photos', validIso, upload.array('photos'), async (req,
       .prepare('SELECT COALESCE(MAX(sort_order), -1) AS max FROM photos WHERE iso = ?')
       .get(iso) as { max: number };
     const insert = db.prepare(
-      'INSERT INTO photos (id, iso, original_ext, width, height, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      `INSERT INTO photos (id, iso, original_ext, width, height, sort_order, created_at, lat, lng, place)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
-    processed.forEach((p, i) => insert.run(p.id, iso, p.ext, p.width, p.height, max + 1 + i, now));
+    processed.forEach((p, i) =>
+      insert.run(p.id, iso, p.ext, p.width, p.height, max + 1 + i, now, location?.lat ?? null, location?.lng ?? null, location?.name ?? null),
+    );
     return inserted.changes > 0;
   });
 
@@ -187,18 +233,81 @@ api.put('/settings', (req, res) => {
   res.json({ defaultTheme: theme });
 });
 
+/** Update a photo's caption and/or location (send location: null to remove it). */
 api.patch('/photos/:id', (req, res) => {
-  const caption = req.body?.caption;
-  if (typeof caption !== 'string' || caption.length > 500) {
+  const caption: unknown = req.body?.caption;
+  let location: Location | null | undefined;
+  try {
+    location = parseLocation(req.body?.location);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+    return;
+  }
+  if (caption !== undefined && (typeof caption !== 'string' || caption.length > 500)) {
     res.status(400).json({ error: 'Bad caption' });
     return;
   }
-  const result = db.prepare('UPDATE photos SET caption = ? WHERE id = ?').run(caption.trim(), req.params.id);
-  if (result.changes === 0) {
+  if (caption === undefined && location === undefined) {
+    res.status(400).json({ error: 'Nothing to update' });
+    return;
+  }
+  const id = String(req.params.id);
+  const changes = transaction(() => {
+    let n = 0;
+    if (typeof caption === 'string') n = Number(db.prepare('UPDATE photos SET caption = ? WHERE id = ?').run(caption.trim(), id).changes);
+    if (location !== undefined) {
+      n = Number(
+        db
+          .prepare('UPDATE photos SET lat = ?, lng = ?, place = ? WHERE id = ?')
+          .run(location?.lat ?? null, location?.lng ?? null, location?.name ?? null, id).changes,
+      );
+    }
+    return n;
+  });
+  if (changes === 0) {
     res.status(404).json({ error: 'Photo not found' });
     return;
   }
   res.json({ ok: true });
+});
+
+// OpenStreetMap's search allows about 1 request per second and asks apps to identify themselves.
+let lastGeocode = 0;
+
+/** Place search for tagging photos, proxied to OpenStreetMap Nominatim. */
+api.get('/geocode', async (req, res) => {
+  const q = String(req.query.q ?? '').trim();
+  const country = String(req.query.country ?? '').toLowerCase();
+  if (q.length < 2 || q.length > 200) {
+    res.status(400).json({ error: 'Type at least 2 characters' });
+    return;
+  }
+  const wait = lastGeocode + 1100 - Date.now();
+  lastGeocode = Date.now() + Math.max(wait, 0);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+
+  const url = new URL('https://nominatim.openstreetmap.org/search');
+  url.search = new URLSearchParams({ q, format: 'jsonv2', limit: '8', 'accept-language': 'en' }).toString();
+  if (/^[a-z]{2}$/.test(country)) url.searchParams.set('countrycodes', country);
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'ProjectLeather/1.2 (personal photo portfolio)' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!r.ok) throw new Error(`OpenStreetMap search failed (${r.status})`);
+    const results = (await r.json()) as { name?: string; display_name: string; lat: string; lon: string }[];
+    res.json(
+      results.map((p) => ({
+        name: p.name || p.display_name.split(',')[0],
+        detail: p.display_name,
+        lat: Number(p.lat),
+        lng: Number(p.lon),
+      })),
+    );
+  } catch (e) {
+    const timedOut = (e as Error).name === 'TimeoutError';
+    res.status(502).json({ error: timedOut ? 'Location search timed out. Are you online?' : (e as Error).message });
+  }
 });
 
 api.delete('/photos/:id', async (req, res) => {

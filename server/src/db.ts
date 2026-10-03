@@ -34,9 +34,19 @@ db.exec(`
 `);
 
 // Additive migrations for databases created by earlier versions.
-const countryColumns = (db.prepare('PRAGMA table_info(countries)').all() as { name: string }[]).map((c) => c.name);
-if (!countryColumns.includes('theme')) {
+const columns = (table: string) => (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+if (!columns('countries').includes('theme')) {
   db.exec(`ALTER TABLE countries ADD COLUMN theme TEXT NOT NULL DEFAULT 'classic'`);
+}
+// v1.2: optional place a photo was taken (from the location search).
+if (!columns('photos').includes('lat')) {
+  db.exec(`
+    BEGIN;
+    ALTER TABLE photos ADD COLUMN lat REAL;
+    ALTER TABLE photos ADD COLUMN lng REAL;
+    ALTER TABLE photos ADD COLUMN place TEXT;
+    COMMIT;
+  `);
 }
 
 /** Page themes a country can use; keep in sync with client/src/lib/themes.ts. */
@@ -70,6 +80,9 @@ export interface PhotoRow {
   caption: string;
   sort_order: number;
   created_at: string;
+  lat: number | null;
+  lng: number | null;
+  place: string | null;
 }
 
 export function transaction<T>(fn: () => T): T {
