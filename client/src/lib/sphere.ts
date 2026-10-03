@@ -13,12 +13,6 @@ export function toVector(lat: number, lng: number, alt: number, out = new THREE.
   return out.set(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
 }
 
-export function toLatLng(v: THREE.Vector3): [number, number] {
-  const lat = 90 - (Math.acos(v.y / v.length()) * 180) / Math.PI;
-  const lng = 90 - (Math.atan2(v.z, v.x) * 180) / Math.PI;
-  return [lat, lng > 180 ? lng - 360 : lng];
-}
-
 // ---------- Point in polygon ----------
 
 export type PointTest = (p: number[]) => boolean;
@@ -34,11 +28,11 @@ function inRing(ring: number[][], [x, y]: number[]) {
 }
 
 /**
- * "Is this lng/lat inside the polygon?" The exact spherical geoContains took ~15 s for Canada's
- * terrain, so this uses a bounding box plus flat ray casting, falling back to geoContains only
+ * "Is this lng/lat inside the polygon?" The exact spherical geoContains was far too slow for
+ * Canada-sized shapes (~15 s), so this uses a bounding box plus flat ray casting, falling back to geoContains only
  * for rings spanning more than 180° of longitude (date-line cases).
  */
-export function polygonTest(coords: number[][][]): PointTest {
+function polygonTest(coords: number[][][]): PointTest {
   const outer = coords[0];
   let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
   for (const [lng, lat] of outer) {

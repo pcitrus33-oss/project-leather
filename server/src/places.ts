@@ -1,5 +1,5 @@
 /** Kinds of tagged places, each drawn with its own symbol on the globe (keep in sync with client/src/lib/api.ts). */
-export const PLACE_KINDS = ['city', 'park', 'mountain', 'beach', 'water', 'island', 'museum', 'landmark', 'airport', 'pin'] as const;
+const PLACE_KINDS = ['city', 'park', 'mountain', 'beach', 'water', 'island', 'museum', 'landmark', 'airport', 'pin'] as const;
 export type PlaceKind = (typeof PLACE_KINDS)[number];
 export const isPlaceKind = (v: unknown): v is PlaceKind => PLACE_KINDS.includes(v as PlaceKind);
 

@@ -6,7 +6,7 @@ import { UPLOADS_DIR, VARIANTS, type Variant } from './paths.js';
 const WEB_MAX = 2048;
 const THUMB_MAX = 640;
 
-export function variantPath(variant: Variant, id: string, ext = '.jpg') {
+function variantPath(variant: Variant, id: string, ext = '.jpg') {
   return path.join(UPLOADS_DIR, variant, id + ext);
 }
 

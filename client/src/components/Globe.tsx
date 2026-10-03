@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GlobeGL, { type GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
-import { PROVINCES, hasProvinces, type Province } from '../lib/provinces';
+import { PROVINCES, getProvince, hasProvinces, type Province } from '../lib/provinces';
 import cities from '../data/cities.json';
 import { buildAllLakes, loadLakes } from '../lib/lakes';
 import { installCameraTilt } from '../lib/cameraTilt';
@@ -146,7 +146,7 @@ function savePov(pov: Pov) {
   }
 }
 
-function makeClouds(radius: number) {
+function makeClouds() {
   const group = new THREE.Group();
   const material = new THREE.MeshToonMaterial({ color: '#ffffff', transparent: true, opacity: 0.92 });
   const puff = new THREE.SphereGeometry(1, 16, 12);
@@ -163,10 +163,7 @@ function makeClouds(radius: number) {
       m.position.set((i - n / 2) * 3.6, Math.random() * 1.5, Math.random() * 2);
       cloud.add(m);
     }
-    const phi = ((90 - lat) * Math.PI) / 180;
-    const theta = ((90 - lng) * Math.PI) / 180;
-    const r = radius * 1.17;
-    cloud.position.set(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+    toVector(lat, lng, 0.17, cloud.position);
     cloud.lookAt(0, 0, 0);
     group.add(cloud);
   }
@@ -293,8 +290,8 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.45;
     controls.enableDamping = true;
-    controls.minDistance = globe.getGlobeRadius() * 1.25;
-    controls.maxDistance = globe.getGlobeRadius() * 5;
+    controls.minDistance = R * 1.25;
+    controls.maxDistance = R * 5;
     controls.addEventListener('start', pauseSpin);
 
     const countries = buildLandMesh(COUNTRIES.map((c) => ({ ...c, key: c.iso })), COUNTRY_ALT);
@@ -321,7 +318,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     const camera = globe.camera();
     const sunOffset = new THREE.Vector3();
 
-    const clouds = makeClouds(globe.getGlobeRadius());
+    const clouds = makeClouds();
     clouds.name = 'clouds';
     globe.scene().add(clouds);
     let frame = 0;
@@ -397,7 +394,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
       const country = getCountry(u.iso);
       if (!country) continue;
       for (const p of u.pins) {
-        const province = PROVINCES.find((x) => x.id === p.province) ?? null;
+        const province = getProvince(p.province) ?? null;
         // A tagged place the globe doesn't show yet gets its own symbol.
         if (!visibleCities.some((c) => Math.hypot(c.lat - p.lat, c.lng - p.lng) < 0.25)) {
           out.push({ kind: 'place', place: p.kind, lat: p.lat, lng: p.lng, name: p.name });
@@ -415,7 +412,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
       }
       // Photos without a place: one bubble at the centre of their province, or of the country.
       for (const p of u.provinces) {
-        const province = PROVINCES.find((x) => x.id === p.id);
+        const province = getProvince(p.id);
         if (province && p.unplacedCount > 0) {
           bubbles.push({
             kind: 'bubble',
@@ -478,7 +475,6 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
       btn.className = 'photo-bubble';
       btn.title = `${m.label}: ${m.count} photo${m.count === 1 ? '' : 's'}`;
       btn.innerHTML = `<img src="${m.thumbUrl}" alt="" draggable="false" /><span class="photo-bubble-count">${m.count}</span>`;
-      btn.style.animationDelay = `${Math.random() * -3}s`;
       btn.onclick = (e) => {
         e.stopPropagation();
         flyRef.current(m.target, m.lat, m.lng);

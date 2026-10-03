@@ -70,7 +70,7 @@ export const THEME_IDS = ['classic', 'airplane'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 export const isThemeId = (v: unknown): v is ThemeId => THEME_IDS.includes(v as ThemeId);
 
-export function getSetting(key: string): string | undefined {
+function getSetting(key: string): string | undefined {
   return (db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined)?.value;
 }
 

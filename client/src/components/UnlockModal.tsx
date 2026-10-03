@@ -80,9 +80,8 @@ export default function UnlockModal({
   const target = prov ?? country;
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = country && needsProvince ? provincesOf(country.iso) : COUNTRIES;
-    return q ? list.filter((c) => c.name.toLowerCase().includes(q)) : list;
-  }, [query, country, needsProvince]);
+    return q ? COUNTRIES.filter((c) => c.name.toLowerCase().includes(q)) : COUNTRIES;
+  }, [query]);
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -154,7 +153,7 @@ export default function UnlockModal({
                   autoFocus
                 />
                 <ul className="country-list">
-                  {(matches as typeof COUNTRIES).map((c) => (
+                  {matches.map((c) => (
                     <li key={c.iso}>
                       <button
                         onClick={() => {

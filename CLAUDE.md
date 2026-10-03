@@ -113,6 +113,7 @@ There are no automated tests. To check visuals, drive the installed Microsoft Ed
   - **Spare port:** if 5174 is taken, `npx vite --mode developer --port 5175` from client/ works too.
 - **Stale processes:** dev servers can survive or run twice (the user may also have a window open), keeping ports 3001/3002/5173/5174 busy. Before testing, check `Get-NetTCPConnection -LocalPort 3001,3002,5173,5174`. Stop only processes you started, plus leftover headless `msedge`.
   - **Mid-edit crashes:** `tsx watch` servers can crash while a file is half-edited, and stay down until the next change.
+  - **Installing packages:** `npm install`/`npm uninstall` stops the user's `npm run dev` (`concurrently -k` shuts all four servers when one exits). Restart it for them afterwards in a new window.
 - **Git Bash paths:** Git Bash rewrites arguments like `/country/JPN` into Windows paths. Pass URL paths without the leading slash.
 - **Auto-spin:** the globe auto-rotates, so screenshots drift from the requested view. Set `sessionStorage['globe-pov']` before load (addInitScript) to aim the camera. For hover/click tests, hover a point, read the tooltip, then click immediately (hovering a country pauses the spin).
 - **Real performance numbers:** headless Edge can use the real GPU (`--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`), which gives the user's Intel Iris Xe frame rates. SwiftShader numbers (~0.5 fps) are meaningless. A bare WebGL canvas reaches ~144 fps there, so compare against that.

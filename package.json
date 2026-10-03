@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
-    "topojson-simplify": "^3.0.3"
+    "topojson-simplify": "^3.0.3",
+    "world-atlas": "^2.0.2"
   }
 }
