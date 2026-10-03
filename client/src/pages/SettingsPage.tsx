@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { api } from '../lib/api';
 import { THEMES, type ThemeId } from '../lib/themes';
 import ThemePreview from '../components/ThemePreview';
+import { DEV, setRevealAll, useRevealAll } from '../lib/devMode';
 import './SettingsPage.css';
 
 export default function SettingsPage() {
@@ -90,6 +91,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {DEV && <DeveloperTools />}
+
       <AnimatePresence>
         {saved && (
           <motion.div
@@ -103,5 +106,60 @@ export default function SettingsPage() {
         )}
       </AnimatePresence>
     </motion.div>
+  );
+}
+
+/** Developer site only: see the whole globe, and fill or empty the sandbox (never the real portfolio). */
+function DeveloperTools() {
+  const revealAll = useRevealAll();
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (label: string, fn: () => Promise<string>) => {
+    setBusy(true);
+    setStatus(`${label}…`);
+    try {
+      setStatus(await fn());
+    } catch (e) {
+      setStatus(`😿 ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="settings-section card dev-tools">
+      <h2 className="title">🛠️ Developer tools</h2>
+      <p className="settings-hint">
+        This is the <b>Developer site</b> (localhost:5174). It has its own sandbox photos, so nothing here touches your real
+        portfolio on localhost:5173.
+      </p>
+      <label className="dev-toggle">
+        <input type="checkbox" checked={revealAll} onChange={(e) => setRevealAll(e.target.checked)} />
+        <span>
+          <b>Show everything</b>: draw every country and province as unlocked, with all cities and capitals. (Display only.)
+        </span>
+      </label>
+      <div className="dev-actions">
+        <button
+          className="btn btn-mint"
+          disabled={busy}
+          onClick={() => run('Adding sample photos', async () => `✅ Added ${(await api.dev.seed()).added} sample photos`)}
+        >
+          🧪 Add sample photos
+        </button>
+        <button
+          className="btn"
+          disabled={busy}
+          onClick={() =>
+            confirm('Delete every photo in the developer sandbox?') &&
+            run('Clearing the sandbox', async () => (await api.dev.reset(), '🧹 Sandbox cleared'))
+          }
+        >
+          🧹 Clear sandbox
+        </button>
+      </div>
+      {status && <div className="dev-status">{status}</div>}
+    </section>
   );
 }

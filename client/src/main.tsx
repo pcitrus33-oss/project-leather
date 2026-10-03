@@ -5,6 +5,9 @@ import '@fontsource-variable/fredoka';
 import 'flag-icons/css/flag-icons.min.css';
 import './styles/theme.css';
 import App from './App';
+import { DEV } from './lib/devMode';
+
+if (DEV) document.title = '🛠️ Project Leather (Developer)';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

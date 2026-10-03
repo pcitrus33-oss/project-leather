@@ -55,3 +55,35 @@
     padding: 14px 16px 40px;
   }
 }
+
+/* Developer site tools */
+.dev-tools {
+  margin-top: 24px;
+  border-style: dashed;
+  background: #fffbe8;
+}
+.dev-tools h2 {
+  font-size: 1.5rem;
+}
+.dev-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+.dev-toggle input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--pink);
+}
+.dev-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.dev-status {
+  margin-top: 14px;
+  font-weight: 600;
+}
