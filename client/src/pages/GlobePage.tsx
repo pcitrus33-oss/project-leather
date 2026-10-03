@@ -45,11 +45,12 @@ export default function GlobePage() {
   };
 
   return (
-    <div className="globe-page" onClick={() => setLockedPopup(null)}>
+    // Close on pointer-down: the globe reports clicks on pointer-up, so a new popup opens after this.
+    <div className="globe-page" onPointerDown={() => setLockedPopup(null)}>
       <Globe
         unlocked={unlocked}
         onOpenCountry={(iso) => navigate(`/country/${iso}`)}
-        onLockedClick={(country, x, y) => setTimeout(() => setLockedPopup({ country, x, y }))}
+        onLockedClick={(country, x, y) => setLockedPopup({ country, x, y })}
       />
 
       <header className="globe-header">
@@ -116,7 +117,7 @@ export default function GlobePage() {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.5, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
           >
             <b>
               <Flag country={lockedPopup.country} /> {lockedPopup.country.name}

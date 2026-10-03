@@ -3,7 +3,8 @@ import GlobeGL, { type GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
 import cities from '../data/cities.json';
-import { buildTerrain, loadElevation } from '../lib/terrain';
+import { buildTerrain, loadTerrainData, SHADOWS_ENABLED } from '../lib/terrain';
+import { buildLandMesh, type LandMesh } from '../lib/landMesh';
 import type { UnlockedCountry } from '../lib/api';
 import './Globe.css';
 
@@ -24,7 +25,6 @@ const COLORS = {
   unlockedSide: '#7cc47a',
   hoverLocked: '#ffc2dd',
   hoverUnlocked: '#fff3c4',
-  outline: '#2b3a67',
 };
 
 // Narrow (phone) screens need the camera further out to fit the whole globe.
@@ -114,13 +114,13 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     const countries = unlocked.flatMap((u) => getCountry(u.iso) ?? []);
     for (const iso of terrainCache.current.keys()) if (!unlockedSet.has(iso)) terrainCache.current.delete(iso);
     if (countries.length === 0) return setTerrain([]);
-    loadElevation()
-      .then((elevation) => {
+    loadTerrainData()
+      .then((terrainData) => {
         if (cancelled) return;
         setTerrain(
           countries.map((country) => {
             let obj = terrainCache.current.get(country.iso);
-            if (!obj) terrainCache.current.set(country.iso, (obj = buildTerrain(country, elevation)));
+            if (!obj) terrainCache.current.set(country.iso, (obj = buildTerrain(country, terrainData)));
             return { country, obj };
           }),
         );
@@ -139,6 +139,24 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     },
     [unlocked],
   );
+
+  const tooltipRef = useRef(tooltip);
+  tooltipRef.current = tooltip;
+
+  // All countries as one merged mesh (see lib/landMesh.ts), built when the globe is ready.
+  const landRef = useRef<LandMesh | null>(null);
+  const [landReady, setLandReady] = useState(false);
+  const tipRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const land = landRef.current;
+    if (!land) return;
+    for (const c of COUNTRIES) {
+      const open = unlockedSet.has(c.iso);
+      const top = c === hovered ? (open ? COLORS.hoverUnlocked : COLORS.hoverLocked) : open ? COLORS.unlocked : COLORS.locked;
+      land.setColor(c.iso, top, open ? COLORS.unlockedSide : COLORS.lockedSide);
+    }
+  }, [landReady, unlockedSet, hovered]);
 
   const globeMaterial = useMemo(
     () => new THREE.MeshToonMaterial({ color: COLORS.ocean, emissive: '#3fa9e0', emissiveIntensity: 0.18 }),
@@ -199,17 +217,81 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     globe.pointOfView(savedPov ?? DEFAULT_POV, 0);
     handleZoom(globe.pointOfView());
 
+    const land = buildLandMesh();
+    globe.scene().add(land.object);
+    landRef.current = land;
+    setLandReady(true);
+
+    // The default light sits fixed over the North Pole; this "sun" follows the camera from the
+    // upper left instead, so every country is lit the same way and mountains cast shadows.
+    const sun = new THREE.DirectionalLight(0xffffff, 0.6 * Math.PI);
+    if (SHADOWS_ENABLED) {
+      globe.renderer().shadowMap.enabled = true;
+      globe.renderer().shadowMap.type = THREE.PCFSoftShadowMap;
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 700 });
+      sun.shadow.bias = -0.0005;
+      sun.shadow.normalBias = 0.02;
+    }
+    globe.lights([new THREE.AmbientLight(0xcccccc, Math.PI), sun]);
+    globe.scene().add(sun.target);
+    const camera = globe.camera();
+    const sunOffset = new THREE.Vector3();
+
     const clouds = makeClouds(globe.getGlobeRadius());
     clouds.name = 'clouds';
     globe.scene().add(clouds);
     let frame = 0;
     const drift = () => {
       clouds.rotation.y += 0.0006;
+      sunOffset.set(-1, 1.2, 0).applyQuaternion(camera.quaternion).multiplyScalar(180);
+      sun.position.copy(camera.position).setLength(320).add(sunOffset);
       frame = requestAnimationFrame(drift);
     };
     drift();
     clouds.userData.stop = () => cancelAnimationFrame(frame);
   }, [pauseSpin, handleZoom]);
+
+  // Hover: find the country under the pointer from its lat/lng (the merged mesh has no per-country objects).
+  useEffect(() => {
+    const globe = globeRef.current;
+    const land = landRef.current;
+    const tip = tipRef.current;
+    if (!globe || !land || !tip) return;
+    const canvas = globe.renderer().domElement;
+    let frame = 0;
+    let last: Country | null = null;
+    const onMove = (e: PointerEvent) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const at = globe.toGlobeCoords(e.offsetX, e.offsetY);
+        const c = at ? land.countryAt(at.lat, at.lng) : null;
+        if (c !== last) {
+          last = c;
+          setHovered(c);
+          if (c) pauseSpin();
+          canvas.style.cursor = c ? 'pointer' : '';
+          tip.innerHTML = c ? tooltipRef.current(c) : '';
+        }
+        tip.style.display = c ? 'block' : 'none';
+        tip.style.transform = `translate(${e.clientX + 16}px, ${e.clientY + 16}px)`;
+      });
+    };
+    const onLeave = () => {
+      cancelAnimationFrame(frame);
+      last = null;
+      setHovered(null);
+      tip.style.display = 'none';
+    };
+    canvas.addEventListener('pointermove', onMove);
+    canvas.addEventListener('pointerleave', onLeave);
+    return () => {
+      cancelAnimationFrame(frame);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerleave', onLeave);
+    };
+  }, [landReady, pauseSpin]);
 
   useEffect(
     () => () => {
@@ -295,34 +377,15 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
         atmosphereColor="#c9f0ff"
         atmosphereAltitude={0.22}
         onGlobeReady={handleReady}
-        polygonsData={COUNTRIES}
-        // The library's own GeoJSON typing is too narrow for MultiPolygons.
-        polygonGeoJsonGeometry={(d) => (d as Country).feature.geometry as never}
-        polygonCapColor={(d) => {
-          const c = d as Country;
-          if (c === hovered) return isUnlocked(c) ? COLORS.hoverUnlocked : COLORS.hoverLocked;
-          return isUnlocked(c) ? COLORS.unlocked : COLORS.locked;
-        }}
-        polygonSideColor={(d) => (isUnlocked(d as Country) ? COLORS.unlockedSide : COLORS.lockedSide)}
-        polygonStrokeColor={() => COLORS.outline}
-        polygonAltitude={(d) => ((d as Country) === hovered && !isUnlocked(d as Country) ? 0.04 : 0.007)}
-        polygonsTransitionDuration={250}
-        polygonLabel={(d) => tooltip(d as Country)}
-        onPolygonHover={(d) => {
-          setHovered((d as Country) ?? null);
-          if (d) pauseSpin();
-        }}
-        onPolygonClick={(d, event) => {
-          const c = d as Country;
+        showPointerCursor={false}
+        onGlobeClick={({ lat, lng }, event) => {
+          const c = landRef.current?.countryAt(lat, lng);
+          if (!c) return;
           if (isUnlocked(c)) flyTo(c);
           else onLockedClick(c, event.clientX, event.clientY);
         }}
         customLayerData={terrain}
         customThreeObject={(d) => (d as (typeof terrain)[number]).obj}
-        customLayerLabel={(d) => tooltip((d as (typeof terrain)[number]).country)}
-        onCustomLayerHover={(d) => {
-          if (d) pauseSpin();
-        }}
         onCustomLayerClick={(d) => flyTo((d as (typeof terrain)[number]).country)}
         onZoom={handleZoom}
         htmlElementsData={markers}
@@ -336,6 +399,7 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
           if (el.classList.contains('photo-bubble-anchor')) el.style.pointerEvents = visible ? 'auto' : 'none';
         }}
       />
+      <div ref={tipRef} className="globe-tip-floating" />
     </div>
   );
 }

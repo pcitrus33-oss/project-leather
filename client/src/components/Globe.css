@@ -128,3 +128,13 @@
 .show-city-names .city-label {
   opacity: 1;
 }
+
+/* Country tooltip that follows the pointer */
+.globe-tip-floating {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 6;
+  display: none;
+  pointer-events: none;
+}
