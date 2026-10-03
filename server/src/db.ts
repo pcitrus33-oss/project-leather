@@ -48,6 +48,22 @@ if (!columns('photos').includes('lat')) {
     COMMIT;
   `);
 }
+// v2.0: provinces (USA, Canada, China) are unlockable on their own, and places remember their kind.
+if (!columns('photos').includes('province')) {
+  db.exec(`
+    BEGIN;
+    ALTER TABLE photos ADD COLUMN province TEXT;
+    ALTER TABLE photos ADD COLUMN place_kind TEXT;
+    CREATE TABLE IF NOT EXISTS provinces (
+      id             TEXT PRIMARY KEY,
+      iso            TEXT NOT NULL,
+      cover_photo_id TEXT,
+      theme          TEXT NOT NULL DEFAULT 'classic',
+      unlocked_at    TEXT NOT NULL
+    );
+    COMMIT;
+  `);
+}
 
 /** Page themes a country can use; keep in sync with client/src/lib/themes.ts. */
 export const THEME_IDS = ['classic', 'airplane'] as const;
@@ -83,6 +99,8 @@ export interface PhotoRow {
   lat: number | null;
   lng: number | null;
   place: string | null;
+  province: string | null;
+  place_kind: string | null;
 }
 
 export function transaction<T>(fn: () => T): T {
