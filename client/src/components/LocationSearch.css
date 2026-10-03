@@ -1,0 +1,90 @@
+.location-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.location-search-bar {
+  display: flex;
+  gap: 8px;
+}
+.location-search-bar .btn {
+  flex: none;
+}
+
+.location-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: var(--border);
+  border-radius: 16px;
+  background: white;
+}
+.location-results button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 2px dashed #e6e9f2;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.location-results li:last-child button {
+  border-bottom: none;
+}
+.location-results button:hover {
+  background: #fff0f7;
+}
+.location-results span {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.location-search-note {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #f3f5fa;
+  font-size: 0.9rem;
+}
+.location-search-note.is-error {
+  background: #fff0f0;
+}
+.location-search-credit {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+/* Chosen-place chip with a remove button */
+.location-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 4px 3px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--mint);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.location-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.location-chip button {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: white;
+  font-size: 10px;
+  cursor: pointer;
+}

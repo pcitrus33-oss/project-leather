@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { COUNTRIES, getCountry } from '../lib/countries';
-import { api, type UploadResult } from '../lib/api';
+import { api, type Location, type UploadResult } from '../lib/api';
 import Flag from './Flag';
+import LocationSearch from './LocationSearch';
 import './UnlockModal.css';
 
 interface Props {
@@ -27,6 +28,8 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [location, setLocation] = useState<Location | null>(null);
+  const [searchingPlace, setSearchingPlace] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filesRef = useRef(files);
@@ -42,6 +45,8 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
     setFiles([]);
     setProgress(null);
     setError(null);
+    setLocation(null);
+    setSearchingPlace(false);
   }, [open, iso]);
 
   useEffect(() => revokeAll, []);
@@ -80,6 +85,7 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
         country.iso,
         files.map((f) => f.file),
         setProgress,
+        location,
       );
       onUploaded(country.iso, result);
       if (result.failed.length) alert(`These files couldn't be read as images:\n${result.failed.join('\n')}`);
@@ -202,6 +208,32 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
                     ))}
                   </div>
                 )}
+
+                <div className="unlock-location">
+                  <div className="unlock-location-title">
+                    📍 Where were these taken? <small>(optional, you can add it later too)</small>
+                  </div>
+                  {location ? (
+                    <span className="location-chip">
+                      <span>📍 {location.name}</span>
+                      <button onClick={() => setLocation(null)} disabled={busy} aria-label="Remove place">
+                        ✕
+                      </button>
+                    </span>
+                  ) : searchingPlace ? (
+                    <LocationSearch
+                      alpha2={country.alpha2}
+                      onPick={(place) => {
+                        setLocation(place);
+                        setSearchingPlace(false);
+                      }}
+                    />
+                  ) : (
+                    <button className="btn unlock-location-add" onClick={() => setSearchingPlace(true)} disabled={busy}>
+                      Add a place
+                    </button>
+                  )}
+                </div>
 
                 {error && <div className="modal-error">😿 {error}</div>}
 

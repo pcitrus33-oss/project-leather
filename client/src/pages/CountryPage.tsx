@@ -5,7 +5,7 @@ import Lightbox from 'yet-another-react-lightbox';
 import Captions from 'yet-another-react-lightbox/plugins/captions';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/captions.css';
-import { api, type Photo, type UploadResult } from '../lib/api';
+import { api, type Location, type Photo, type UploadResult } from '../lib/api';
 import { getCountry } from '../lib/countries';
 import { celebrate } from '../lib/celebrate';
 import type { ThemeId } from '../lib/themes';
@@ -15,13 +15,18 @@ import { EditablePhotoGrid, PhotoGrid } from '../components/PhotoGrid';
 import Flag from '../components/Flag';
 import AirplaneGallery from '../components/AirplaneGallery';
 import ThemePicker from '../components/ThemePicker';
+import LocationSearch from '../components/LocationSearch';
 import './CountryPage.css';
 
 interface Draft {
   photos: Photo[];
   captions: Record<string, string>;
+  locations: Record<string, Location | null>;
   coverId: string | null;
 }
+
+const sameLocation = (a: Location | null, b: Location | null) =>
+  a === b || (!!a && !!b && a.lat === b.lat && a.lng === b.lng && a.name === b.name);
 
 export default function CountryPage() {
   const { iso = '' } = useParams();
@@ -38,6 +43,7 @@ export default function CountryPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [locatingId, setLocatingId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     if (!country) return Promise.resolve();
@@ -82,13 +88,14 @@ export default function CountryPage() {
     }
   };
 
-  const startEditing = () => setDraft({ photos, captions: {}, coverId: effectiveCover });
+  const startEditing = () => setDraft({ photos, captions: {}, locations: {}, coverId: effectiveCover });
 
   const dirty =
     !!draft &&
     (draft.coverId !== effectiveCover ||
       draft.photos.some((p, i) => p.id !== photos[i]?.id) ||
-      Object.entries(draft.captions).some(([id, c]) => photos.find((p) => p.id === id)?.caption !== c.trim()));
+      Object.entries(draft.captions).some(([id, c]) => photos.find((p) => p.id === id)?.caption !== c.trim()) ||
+      Object.entries(draft.locations).some(([id, l]) => !sameLocation(photos.find((p) => p.id === id)?.location ?? null, l)));
 
   const cancelEditing = () => {
     if (dirty && !confirm('Throw away your changes?')) return;
@@ -107,6 +114,9 @@ export default function CountryPage() {
       }
       for (const [id, caption] of Object.entries(draft.captions)) {
         if (photos.find((p) => p.id === id)?.caption !== caption.trim()) await api.setCaption(id, caption);
+      }
+      for (const [id, location] of Object.entries(draft.locations)) {
+        if (!sameLocation(photos.find((p) => p.id === id)?.location ?? null, location)) await api.setLocation(id, location);
       }
       if (draft.coverId && draft.coverId !== effectiveCover) await api.setCover(country.iso, draft.coverId);
       await load();
@@ -217,7 +227,7 @@ export default function CountryPage() {
 
       {draft && (
         <div className="edit-banner">
-          Drag photos to rearrange · ⭐ picks the globe cover · type to caption. Hit <b>Save</b> when you’re happy!
+          Drag photos to rearrange · ⭐ picks the globe cover · 📍 tags where it was taken · type to caption. Hit <b>Save</b> when you’re happy!
         </div>
       )}
 
@@ -245,6 +255,9 @@ export default function CountryPage() {
             onCaption={(id, c) => setDraft({ ...draft, captions: { ...draft.captions, [id]: c } })}
             onCover={(id) => setDraft({ ...draft, coverId: id })}
             onDelete={deletePhoto}
+            locations={draft.locations}
+            onLocate={setLocatingId}
+            onClearLocation={(id) => setDraft({ ...draft, locations: { ...draft.locations, [id]: null } })}
           />
         ) : photos.length === 0 ? null : theme === 'airplane' ? (
           <AirplaneGallery photos={photos} onOpen={setLightboxIndex} />
@@ -259,8 +272,31 @@ export default function CountryPage() {
         close={() => setLightboxIndex(-1)}
         plugins={[Captions]}
         captions={{ descriptionTextAlign: 'center' }}
-        slides={photos.map((p) => ({ src: p.webUrl, width: p.width, height: p.height, description: p.caption || undefined }))}
+        slides={photos.map((p) => ({
+          src: p.webUrl,
+          width: p.width,
+          height: p.height,
+          description: [p.caption, p.location && `📍 ${p.location.name}`].filter(Boolean).join('  ·  ') || undefined,
+        }))}
       />
+
+      {locatingId && draft && (
+        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setLocatingId(null)}>
+          <div className="modal card" role="dialog" aria-modal="true">
+            <button className="btn btn-icon modal-close" onClick={() => setLocatingId(null)} aria-label="Close">
+              ✕
+            </button>
+            <h2 className="title modal-title">📍 Where was this taken?</h2>
+            <LocationSearch
+              alpha2={country.alpha2}
+              onPick={(place) => {
+                setDraft({ ...draft, locations: { ...draft.locations, [locatingId]: place } });
+                setLocatingId(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       <UnlockModal
         open={addOpen}

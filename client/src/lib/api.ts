@@ -1,5 +1,23 @@
 import type { ThemeId } from './themes';
 
+/** A place picked from the location search. */
+export interface Location {
+  lat: number;
+  lng: number;
+  name: string;
+}
+
+export interface PlaceResult extends Location {
+  /** Full address line, to tell similarly named places apart. */
+  detail: string;
+}
+
+/** A spot on the globe where one or more of a country's photos were taken. */
+export interface Pin extends Location {
+  count: number;
+  thumbUrl: string;
+}
+
 export interface Photo {
   id: string;
   iso: string;
@@ -9,6 +27,7 @@ export interface Photo {
   thumbUrl: string;
   webUrl: string;
   originalUrl: string;
+  location: Location | null;
 }
 
 export interface UnlockedCountry {
@@ -17,6 +36,9 @@ export interface UnlockedCountry {
   unlockedAt: string;
   coverId: string;
   coverUrl: string;
+  /** Photos without a place; shown as one bubble at the country's centre. */
+  unplacedCount: number;
+  pins: Pin[];
 }
 
 export interface CountryPhotos {
@@ -60,6 +82,13 @@ export const api = {
 
   setCaption: (id: string, caption: string) => request<{ ok: true }>(`/api/photos/${id}`, json('PATCH', { caption })),
 
+  setLocation: (id: string, location: Location | null) =>
+    request<{ ok: true }>(`/api/photos/${id}`, json('PATCH', { location })),
+
+  /** Search OpenStreetMap for places, optionally within one country (ISO alpha-2). */
+  searchPlaces: (q: string, alpha2?: string) =>
+    request<PlaceResult[]>(`/api/geocode?${new URLSearchParams({ q, country: alpha2 ?? '' })}`),
+
   setTheme: (iso: string, theme: ThemeId) => request<{ theme: ThemeId }>(`/api/countries/${iso}/theme`, json('PUT', { theme })),
 
   settings: () => request<Settings>('/api/settings'),
@@ -69,9 +98,15 @@ export const api = {
   deletePhoto: (id: string) => request<{ relocked: boolean }>(`/api/photos/${id}`, { method: 'DELETE' }),
 
   /** Uses XHR (not fetch) so we can report upload progress. */
-  upload(iso: string, files: File[], onProgress: (fraction: number) => void): Promise<UploadResult> {
+  upload(iso: string, files: File[], onProgress: (fraction: number) => void, location?: Location | null): Promise<UploadResult> {
     return new Promise((resolve, reject) => {
       const form = new FormData();
+      // Text fields go before the files so the server sees them alongside the upload.
+      if (location) {
+        form.append('lat', String(location.lat));
+        form.append('lng', String(location.lng));
+        form.append('place', location.name);
+      }
       files.forEach((f) => form.append('photos', f));
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `/api/countries/${iso}/photos`);

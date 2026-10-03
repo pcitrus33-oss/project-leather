@@ -10,7 +10,7 @@ import {
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
-import type { Photo } from '../lib/api';
+import type { Location, Photo } from '../lib/api';
 import './PhotoGrid.css';
 
 interface ViewProps {
@@ -45,15 +45,31 @@ export function PhotoGrid({ photos, coverId, onOpen }: ViewProps) {
 interface EditProps {
   photos: Photo[];
   captions: Record<string, string>;
+  /** Draft place per photo id (null = removed); falls back to the saved one. */
+  locations: Record<string, Location | null>;
   coverId: string | null;
   busyId: string | null;
+  onLocate: (id: string) => void;
+  onClearLocation: (id: string) => void;
   onReorder: (photos: Photo[]) => void;
   onCaption: (id: string, caption: string) => void;
   onCover: (id: string) => void;
   onDelete: (photo: Photo) => void;
 }
 
-export function EditablePhotoGrid({ photos, captions, coverId, busyId, onReorder, onCaption, onCover, onDelete }: EditProps) {
+export function EditablePhotoGrid({
+  photos,
+  captions,
+  locations,
+  coverId,
+  busyId,
+  onReorder,
+  onCaption,
+  onCover,
+  onDelete,
+  onLocate,
+  onClearLocation,
+}: EditProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -75,6 +91,9 @@ export function EditablePhotoGrid({ photos, captions, coverId, busyId, onReorder
               key={p.id}
               photo={p}
               caption={captions[p.id] ?? p.caption}
+              location={p.id in locations ? locations[p.id] : p.location}
+              onLocate={() => onLocate(p.id)}
+              onClearLocation={() => onClearLocation(p.id)}
               isCover={p.id === coverId}
               busy={busyId === p.id}
               onCaption={(c) => onCaption(p.id, c)}
@@ -91,6 +110,9 @@ export function EditablePhotoGrid({ photos, captions, coverId, busyId, onReorder
 interface TileProps {
   photo: Photo;
   caption: string;
+  location: Location | null;
+  onLocate: () => void;
+  onClearLocation: () => void;
   isCover: boolean;
   busy: boolean;
   onCaption: (caption: string) => void;
@@ -98,7 +120,7 @@ interface TileProps {
   onDelete: () => void;
 }
 
-function SortableTile({ photo, caption, isCover, busy, onCaption, onCover, onDelete }: TileProps) {
+function SortableTile({ photo, caption, location, isCover, busy, onCaption, onCover, onDelete, onLocate, onClearLocation }: TileProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: photo.id });
 
   return (
@@ -130,6 +152,20 @@ function SortableTile({ photo, caption, isCover, busy, onCaption, onCover, onDel
         maxLength={500}
         onChange={(e) => onCaption(e.target.value)}
       />
+      {location ? (
+        <span className="location-chip edit-tile-location">
+          <button className="edit-tile-location-name" onClick={onLocate} title="Change place">
+            📍 {location.name}
+          </button>
+          <button onClick={onClearLocation} aria-label="Remove place">
+            ✕
+          </button>
+        </span>
+      ) : (
+        <button className="btn edit-tile-add-location" onClick={onLocate}>
+          📍 Add place
+        </button>
+      )}
     </div>
   );
 }

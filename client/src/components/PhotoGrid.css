@@ -117,3 +117,25 @@
     gap: 16px;
   }
 }
+
+.edit-tile-location {
+  align-self: flex-start;
+}
+.edit-tile-location .edit-tile-location-name {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.edit-tile-add-location {
+  align-self: flex-start;
+  padding: 0.3em 0.9em;
+  font-size: 0.85rem;
+  box-shadow: 0 3px 0 rgba(43, 58, 103, 0.18);
+}

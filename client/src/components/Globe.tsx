@@ -30,7 +30,7 @@ const COLORS = {
 // Narrow (phone) screens need the camera further out to fit the whole globe.
 type Marker =
   | { kind: 'city'; iso: string; lat: number; lng: number; name: string; capital: boolean }
-  | { kind: 'bubble'; lat: number; lng: number; country: Country; count: number; coverUrl: string };
+  | { kind: 'bubble'; lat: number; lng: number; country: Country; count: number; thumbUrl: string; label: string };
 
 const CITY_MARKERS = cities.map((c): Marker & { kind: 'city' } => ({
   kind: 'city',
@@ -155,13 +155,14 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
   const openRef = useRef(onOpenCountry);
   openRef.current = onOpenCountry;
 
-  const flyTo = useCallback((country: Country) => {
+  // Flies to a spot (a photo pin, or the country's centre), then opens the country page.
+  const flyTo = useCallback((country: Country, lat = country.lat, lng = country.lng) => {
     const globe = globeRef.current;
     if (!globe || flyingRef.current) return;
     flyingRef.current = true;
     savePov(globe.pointOfView());
     globe.controls().autoRotate = false;
-    globe.pointOfView({ lat: country.lat, lng: country.lng, altitude: 0.9 }, FLY_MS);
+    globe.pointOfView({ lat, lng, altitude: 0.9 }, FLY_MS);
     window.setTimeout(() => openRef.current(country.iso), FLY_MS);
   }, []);
   const flyRef = useRef(flyTo);
@@ -226,9 +227,23 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     () => [
       // Cities only appear once their country is unlocked.
       ...CITY_MARKERS.filter((m) => unlockedSet.has(m.iso)),
+      // One bubble per tagged place, plus one at the centre for photos without a place yet.
       ...unlocked.flatMap((u): Marker[] => {
         const c = getCountry(u.iso);
-        return c ? [{ kind: 'bubble', lat: c.lat, lng: c.lng, country: c, count: u.count, coverUrl: u.coverUrl }] : [];
+        if (!c) return [];
+        const pins: Marker[] = u.pins.map((p) => ({
+          kind: 'bubble',
+          lat: p.lat,
+          lng: p.lng,
+          country: c,
+          count: p.count,
+          thumbUrl: p.thumbUrl,
+          label: `${p.name || c.name}, ${c.name}`,
+        }));
+        if (u.unplacedCount > 0) {
+          pins.push({ kind: 'bubble', lat: c.lat, lng: c.lng, country: c, count: u.unplacedCount, thumbUrl: u.coverUrl, label: c.name });
+        }
+        return pins;
       }),
     ],
     [unlocked, unlockedSet],
@@ -254,12 +269,12 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
       el.className = 'photo-bubble-anchor';
       const btn = document.createElement('button');
       btn.className = 'photo-bubble';
-      btn.title = `${m.country.name} — ${m.count} photo${m.count === 1 ? '' : 's'}`;
-      btn.innerHTML = `<img src="${m.coverUrl}" alt="" draggable="false" /><span class="photo-bubble-count">${m.count}</span>`;
+      btn.title = `${m.label}: ${m.count} photo${m.count === 1 ? '' : 's'}`;
+      btn.innerHTML = `<img src="${m.thumbUrl}" alt="" draggable="false" /><span class="photo-bubble-count">${m.count}</span>`;
       btn.style.animationDelay = `${Math.random() * -3}s`;
       btn.onclick = (e) => {
         e.stopPropagation();
-        flyRef.current(m.country);
+        flyRef.current(m.country, m.lat, m.lng);
       };
       btn.onpointerenter = pauseSpin;
       el.appendChild(btn);
