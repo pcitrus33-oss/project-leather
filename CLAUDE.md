@@ -36,7 +36,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - `countries(iso, cover_photo_id, unlocked_at, theme)`
   - `provinces(id, iso, cover_photo_id, theme, unlocked_at)`: unlocked provinces of USA/CAN/CHN, ids like `CA-ON`.
   - `photos(id, iso, province, original_ext, width, height, caption, sort_order, created_at, lat, lng, place, place_kind)`: `province` is required for USA/CAN/CHN uploads; the place fields are null until tagged.
-  - `settings(key, value)`: currently only `default_theme`.
+  - `settings(key, value)`: `default_theme` and `globe_view` (`day` | `daynight`; `GLOBE_VIEWS` must match `GlobeView` in client/src/lib/api.ts). `PUT /api/settings` saves any subset.
 - **Developer sandbox:** `paths.ts` switches to `data-dev/` and port 3002 when started with `--dev`. `dev.ts` (`/api/dev/seed`, `/api/dev/reset`) is mounted only then.
 - **Schema changes** must be additive in-place migrations in `db.ts` (see how the `theme` column is added via `PRAGMA table_info`). The user's real database already exists, so never recreate it.
 - Use the `transaction()` helper for multi-statement writes.
@@ -74,10 +74,14 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - **Callbacks:** bubble DOM is built by hand, so callbacks reach it through refs (`openRef`, `flyRef`).
   - **Clicking a country:** clicking an unlocked country or a bubble flies the camera there (`FLY_MS`), then navigates.
   - **Remembered view:** the camera position is kept in a module variable plus `sessionStorage` (`savePov`), so returning to `/` restores the same view. Always save `currentPov()` (the un-tilted view), never the raw `pointOfView()`.
-  - **Camera tilt** (`lib/cameraTilt.ts`): straight down when zoomed out, tilting to ~62° from the surface at the closest zoom.
+  - **Camera tilt** (`lib/cameraTilt.ts`): straight down when zoomed out, tilting to ~55° from the surface at the closest zoom (`MAX_TILT` 35°, the user's choice).
     - It wraps `controls.update`: undo the tilt, let OrbitControls update, then re-apply it. The controls keep their own un-tilted maths, while rendering, CSS2D markers and picking (`toGlobeCoords`) all see the tilted camera.
     - If something else moved the camera in between (a `pointOfView` fly-to), it isn't undone.
-  - **Clouds:** a plain three.js group added via `globe.scene()`.
+  - **Clouds:** a plain three.js group added via `globe.scene()`, faded out by `cloudOpacity` as the camera comes down to their height.
+  - **Day/Night view** (`lib/dayNight.ts`, `view` prop):
+    - `buildNightShade` is a transparent shader shell just above the land that darkens the night side from the real subsolar point. It is lighter when zoomed in (`setZoom`) and refreshed every minute.
+    - Markers carry `data-lat`/`data-lng`; `markNight` toggles `.is-night` on them, which makes them glow.
+  - **Tooltip:** `.globe-tip-floating` is rendered outside `.globe-wrapper` (a fragment sibling). Inside it, globe.gl's huge marker z-indexes would cover it.
   - **Unlocked countries are white.** **Large lakes** are part of the base globe: `lib/lakes.ts` builds one merged layer for all of them, above both country and province caps, whatever is unlocked.
     - **Lake data:** `src/data/lakes.json` comes from `scripts/build-lakes.mjs`: Natural Earth 1:50m lakes of at least `MIN_KM2` (3,000 km²), plus any names in `ALWAYS_KEEP`. The user will name small but important lakes (e.g. the Dead Sea) to add there.
     - **History:** v1.2 tried NASA-elevation relief, then painted terrain (fields, rivers, mountains, shadows). The user rejected both, so don't bring that back unless asked.
@@ -96,6 +100,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - **Type cast:** `polygonGeoJsonGeometry` needs an `as never` cast because the library's own GeoJSON types are too narrow.
 - **Flags:** Windows can't render flag emoji. Use the `flag-icons` CSS through `<Flag>` or `flagHtml()` (the latter for raw-HTML contexts like globe tooltips).
 - **Routes:** `/country/:iso` and `/country/:iso/:province`, both handled by `pages/CountryPage.tsx`. For USA/CAN/CHN, `/country/:iso` renders `ProvinceCatalogue`; a province page has buttons back to the globe and to the country.
+- **Globe page menu:** `Dock` in GlobePage.tsx is a right-edge slide-out with a tab: hover or click to open, and it closes 700 ms after the pointer leaves. It is pinned open while nothing is unlocked.
 - **Developer site:** `lib/devMode.ts` sets `DEV` (`import.meta.env.MODE === 'developer'`) and the "Show everything" switch (`useRevealAll`, localStorage). The tools live in SettingsPage's `DeveloperTools`. Reveal is display-only; clicks still follow real data.
 - `pages/CountryPage.tsx` picks the view component by theme (`PhotoGrid` = classic, `AirplaneGallery` = airplane). Edit mode always uses the shared `EditablePhotoGrid`, whatever the theme.
   - **Edit mode** works on a local `draft` (order, captions, locations, cover). Save sends only the diffs: `PUT order`, `PATCH` captions and locations, `PUT cover`. Deletes happen immediately.

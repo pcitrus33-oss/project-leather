@@ -39,7 +39,11 @@ Everything is in the `data/` folder:
 
 ## Using it
 
-- **Globe:** drag to spin, scroll or pinch to zoom, and hover a country to see its name. It spins slowly on its own until you touch it. Zoomed out you look straight down; as you zoom in, the view tilts so you look across the land.
+- **Globe:** drag to spin, scroll or pinch to zoom, and hover a country to see its name. It spins slowly on its own until you touch it. Zoomed out you look straight down; as you zoom in, the view tilts (down to 55° from the surface) so you look across the land.
+- **Menu:** the tab on the right edge slides out the menu: Countries visited, Photos uploaded, 🔓 Unlock a country and ⚙️ Settings. It tucks itself away again when you move off it.
+- **Globe view** (in Settings):
+  - **Day:** the whole globe lit.
+  - **Day/Night cycle:** real-time day and night for right now. The night side is shaded gray (lighter as you zoom in), and places there glow.
 - **Unlocked countries** turn white; locked countries stay gray. Large lakes (3,000 km² and up) are always shown.
 - **Cities** (unlocked countries only): little cartoon skyscrapers on the big cities, and a taller tower with the country's flag on a pole for the capital. Capital names appear as you zoom in; other city names appear when you zoom closer.
 - **Provinces (USA, Canada, China):** zoom in and these countries split into states/provinces. Each one is unlocked on its own (white when it has photos, gray when not) and has its own photo page. Each province's capital gets a medium tower with a gold dome.
@@ -56,7 +60,7 @@ Everything is in the `data/` folder:
     - **Classic:** big tilted polaroids.
     - **Airplane:** photos through airplane windows, three across. There's always at least a 3×3 cabin, and empty windows show blue sky.
   - Deleting a country's last photo locks it again.
-- **⚙️ Settings** (top right of the globe): choose the default theme that newly unlocked countries start with. Countries you've already unlocked keep their own theme.
+- **⚙️ Settings** (in the menu): choose the globe view, and the default theme that newly unlocked countries start with. Countries you've already unlocked keep their own theme.
 
 ## Project layout
 
