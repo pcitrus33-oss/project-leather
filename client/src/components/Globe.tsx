@@ -3,6 +3,7 @@ import GlobeGL, { type GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
 import cities from '../data/cities.json';
+import { buildTerrain, loadElevation } from '../lib/terrain';
 import type { UnlockedCountry } from '../lib/api';
 import './Globe.css';
 
@@ -18,8 +19,9 @@ const COLORS = {
   ocean: '#8fd7f7',
   locked: '#c8ced8',
   lockedSide: '#a3abba',
-  unlocked: '#ffffff',
-  unlockedSide: '#e3e8f2',
+  // Unlocked countries are covered by terrain; their flat cap matches its lowland colour.
+  unlocked: '#a6e3a1',
+  unlockedSide: '#7cc47a',
   hoverLocked: '#ffc2dd',
   hoverUnlocked: '#fff3c4',
   outline: '#2b3a67',
@@ -103,6 +105,40 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
 
   const unlockedSet = useMemo(() => new Set(unlocked.map((u) => u.iso)), [unlocked]);
   const isUnlocked = useCallback((c: Country) => unlockedSet.has(c.iso), [unlockedSet]);
+
+  // Relief models for unlocked countries, built once per country after the elevation map loads.
+  const [terrain, setTerrain] = useState<{ country: Country; obj: THREE.Object3D }[]>([]);
+  const terrainCache = useRef(new Map<string, THREE.Object3D>());
+  useEffect(() => {
+    let cancelled = false;
+    const countries = unlocked.flatMap((u) => getCountry(u.iso) ?? []);
+    for (const iso of terrainCache.current.keys()) if (!unlockedSet.has(iso)) terrainCache.current.delete(iso);
+    if (countries.length === 0) return setTerrain([]);
+    loadElevation()
+      .then((elevation) => {
+        if (cancelled) return;
+        setTerrain(
+          countries.map((country) => {
+            let obj = terrainCache.current.get(country.iso);
+            if (!obj) terrainCache.current.set(country.iso, (obj = buildTerrain(country, elevation)));
+            return { country, obj };
+          }),
+        );
+      })
+      .catch((e) => console.error(e));
+    return () => {
+      cancelled = true;
+    };
+  }, [unlocked, unlockedSet]);
+
+  const tooltip = useCallback(
+    (c: Country) => {
+      const u = unlocked.find((x) => x.iso === c.iso);
+      const sub = u ? `${u.count} photo${u.count === 1 ? '' : 's'} · click to open` : 'locked · click to unlock';
+      return `<div class="globe-tip"><b>${flagHtml(c)} ${c.name}</b><span>${sub}</span></div>`;
+    },
+    [unlocked],
+  );
 
   const globeMaterial = useMemo(
     () => new THREE.MeshToonMaterial({ color: COLORS.ocean, emissive: '#3fa9e0', emissiveIntensity: 0.18 }),
@@ -254,18 +290,9 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
         }}
         polygonSideColor={(d) => (isUnlocked(d as Country) ? COLORS.unlockedSide : COLORS.lockedSide)}
         polygonStrokeColor={() => COLORS.outline}
-        polygonAltitude={(d) => {
-          const c = d as Country;
-          if (c === hovered) return 0.04;
-          return isUnlocked(c) ? 0.018 : 0.007;
-        }}
+        polygonAltitude={(d) => ((d as Country) === hovered && !isUnlocked(d as Country) ? 0.04 : 0.007)}
         polygonsTransitionDuration={250}
-        polygonLabel={(d) => {
-          const c = d as Country;
-          const u = unlocked.find((x) => x.iso === c.iso);
-          const sub = u ? `${u.count} photo${u.count === 1 ? '' : 's'} · click to open` : 'locked · click to unlock';
-          return `<div class="globe-tip"><b>${flagHtml(c)} ${c.name}</b><span>${sub}</span></div>`;
-        }}
+        polygonLabel={(d) => tooltip(d as Country)}
         onPolygonHover={(d) => {
           setHovered((d as Country) ?? null);
           if (d) pauseSpin();
@@ -275,6 +302,13 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
           if (isUnlocked(c)) flyTo(c);
           else onLockedClick(c, event.clientX, event.clientY);
         }}
+        customLayerData={terrain}
+        customThreeObject={(d) => (d as (typeof terrain)[number]).obj}
+        customLayerLabel={(d) => tooltip((d as (typeof terrain)[number]).country)}
+        onCustomLayerHover={(d) => {
+          if (d) pauseSpin();
+        }}
+        onCustomLayerClick={(d) => flyTo((d as (typeof terrain)[number]).country)}
         onZoom={handleZoom}
         htmlElementsData={markers}
         htmlLat="lat"
