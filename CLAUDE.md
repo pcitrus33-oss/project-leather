@@ -73,9 +73,12 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - **HTML bubbles:** globe.gl positions each element with its own CSS `transform`. Animations and hover sizing must go on the **inner** `.photo-bubble` button, never on the anchor element it returns.
   - **Callbacks:** bubble DOM is built by hand, so callbacks reach it through refs (`openRef`, `flyRef`).
   - **Clicking a country:** clicking an unlocked country or a bubble flies the camera there (`FLY_MS`), then navigates.
-  - **Remembered view:** the camera position is kept in a module variable plus `sessionStorage` (`savePov`), so returning to `/` restores the same view.
+  - **Remembered view:** the camera position is kept in a module variable plus `sessionStorage` (`savePov`), so returning to `/` restores the same view. Always save `currentPov()` (the un-tilted view), never the raw `pointOfView()`.
+  - **Camera tilt** (`lib/cameraTilt.ts`): straight down when zoomed out, tilting to ~62° from the surface at the closest zoom.
+    - It wraps `controls.update`: undo the tilt, let OrbitControls update, then re-apply it. The controls keep their own un-tilted maths, while rendering, CSS2D markers and picking (`toGlobeCoords`) all see the tilted camera.
+    - If something else moved the camera in between (a `pointOfView` fly-to), it isn't undone.
   - **Clouds:** a plain three.js group added via `globe.scene()`.
-  - **Unlocked countries are white**, with only their **large lakes** drawn on top (`lib/lakes.ts`, a globe.gl custom layer, so clicking a lake opens the country).
+  - **Unlocked countries are white.** **Large lakes** are part of the base globe: `lib/lakes.ts` builds one merged layer for all of them, above both country and province caps, whatever is unlocked.
     - **Lake data:** `src/data/lakes.json` comes from `scripts/build-lakes.mjs`: Natural Earth 1:50m lakes of at least `MIN_KM2` (3,000 km²), plus any names in `ALWAYS_KEEP`. The user will name small but important lakes (e.g. the Dead Sea) to add there.
     - **History:** v1.2 tried NASA-elevation relief, then painted terrain (fields, rivers, mountains, shadows). The user rejected both, so don't bring that back unless asked.
     - **Lighting:** a "sun" directional light follows the camera from the upper left. The default globe.gl light was fixed over the North Pole.
@@ -83,7 +86,9 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
     - **Cities:** three sizes, city < province capital (gold dome) < national capital (spire and waving `flag-icons` flag). Each city gets one of three tower shapes and a pastel colour, chosen from its name.
     - **Visibility:** `ALL_CITIES` merges cities.json with province capitals; when one is the same place as the other, the national capital wins. In USA/CAN/CHN a city shows when *its province* is unlocked.
     - **Place symbols:** a tagged pin not near a visible city gets its kind's symbol.
-    - **Anchors:** `.city-marker` and `.photo-bubble-anchor` are zero-size anchors on the point. Bubbles float 46px above it, on a "string", so the symbol underneath stays visible.
+    - **Anchors:** `.city-marker` and `.photo-bubble-anchor` are zero-size anchors on the point.
+    - **Bubbles and stems:** bubbles are anchored at `STEM_ALT`, on top of a real 3D stem (`buildStems`, one InstancedMesh) rising radially from their spot. That keeps them attached as the globe turns, and the HTML photo stays upright.
+    - **Bubble limit:** `pickBubbles` caps bubbles at 20: the 10 newest by `latestAt`, then 10 at random.
     - **Stacking:** `.globe-wrapper { isolation: isolate }` keeps globe.gl's huge marker z-indexes below the page header.
   - **Cities and bubbles** (cities only for unlocked countries; bubbles one per place pin plus one centre bubble for unplaced photos) share globe.gl's single HTML-element layer (`markers`, a `kind` union). `buildMarker` must stay a stable `useCallback`; otherwise every hover re-render rebuilds ~450 DOM elements.
   - **City names by zoom:** `handleZoom` toggles `show-capital-names` / `show-city-names` classes on the wrapper div directly, with no React state, so the globe doesn't re-render.

@@ -39,12 +39,12 @@ Everything is in the `data/` folder:
 
 ## Using it
 
-- **Globe:** drag to spin, scroll or pinch to zoom, and hover a country to see its name. It spins slowly on its own until you touch it.
-- **Unlocked countries** turn white and show their large lakes (3,000 km² and up). Locked countries stay gray.
+- **Globe:** drag to spin, scroll or pinch to zoom, and hover a country to see its name. It spins slowly on its own until you touch it. Zoomed out you look straight down; as you zoom in, the view tilts so you look across the land.
+- **Unlocked countries** turn white; locked countries stay gray. Large lakes (3,000 km² and up) are always shown.
 - **Cities** (unlocked countries only): little cartoon skyscrapers on the big cities, and a taller tower with the country's flag on a pole for the capital. Capital names appear as you zoom in; other city names appear when you zoom closer.
 - **Provinces (USA, Canada, China):** zoom in and these countries split into states/provinces. Each one is unlocked on its own (white when it has photos, gray when not) and has its own photo page. Each province's capital gets a medium tower with a gold dome.
 - **Places on the globe:** when you tag a photo with a place the globe doesn't show yet, it gets a symbol: a skyscraper for cities, a tree for parks, a mountain, a beach umbrella, waves for water, an island, a museum, a castle for landmarks, a plane for airports, or a pin for anything else.
-- **Photo bubbles:** float like balloons on a string over each place you've tagged, plus one in the middle of the country (or province) for photos without a place. Clicking any of them opens its page.
+- **Photo bubbles:** sit on a little stem rising out of each place you've tagged, plus one in the middle of the country (or province) for photos without a place. Clicking any of them opens its page. To keep the globe tidy there are never more than 20: with more places, the 10 most recent plus 10 others picked at random each time.
 - **Gray country:** click it, then **Add photos** to unlock it.
 - **White country or photo bubble:** click it to fly in and open that country's page.
 - **USA / Canada / China page:** a list of the states/provinces you've unlocked, each with a thumbnail. Click one to open its photo page, which has buttons back to the globe or to the country. 📸 Add photos asks which state/province the photos belong to.
