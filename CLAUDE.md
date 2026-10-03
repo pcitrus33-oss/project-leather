@@ -32,7 +32,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
 **Server (`server/src`)**
 - `db.ts` uses Node's **built-in `node:sqlite`** (`DatabaseSync`), not better-sqlite3, so there is no native build. It has three tables:
   - `countries(iso, cover_photo_id, unlocked_at, theme)`
-  - `photos(id, iso, original_ext, width, height, caption, sort_order, created_at)`
+  - `photos(id, iso, original_ext, width, height, caption, sort_order, created_at, lat, lng, place)`: the place fields are optional and null until tagged.
   - `settings(key, value)`: currently only `default_theme`.
 - **Schema changes** must be additive in-place migrations in `db.ts` (see how the `theme` column is added via `PRAGMA table_info`). The user's real database already exists, so never recreate it.
 - Use the `transaction()` helper for multi-statement writes.
@@ -42,11 +42,14 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - `original` is the untouched file with its original extension.
   - `web` (2048px) and `thumb` (640px) are EXIF-rotated JPEGs named `<uuid>.jpg`.
 - `routes.ts` holds every `/api` endpoint. Country codes are validated by `ISO_RE`.
+- **Places:** `/api/countries` returns, per country, `pins` (photos grouped by place, with rounded lat/lng) and `unplacedCount`. `/api/geocode` proxies OpenStreetMap Nominatim.
+  - **Nominatim usage policy:** at most ~1 request/second (enforced server-side), an identifying User-Agent, search on submit rather than per keystroke, and an OSM credit shown in `LocationSearch`. Keep all four.
 - **Themes:** each country stores its own theme, set to `defaultTheme()` when it is first unlocked. Changing the default never touches existing countries. Theme ids live in `THEME_IDS` (server/src/db.ts) and `THEMES` (client/src/lib/themes.ts). **Keep the two lists in sync.**
 - `paths.ts` resolves `data/` relative to the repo root. `data/` holds the user's real photos and DB. It is git-ignored and must never be committed or wiped.
 
 **Client (`client/src`)**
-- `lib/countries.ts` builds the country list at load time from `world-atlas/countries-50m.json` (TopoJSON). It uses 50m rather than 110m because 110m drops small countries.
+- `lib/countries.ts` builds the country list at load time from `src/data/countries.json`.
+  - **Borders:** the file is the 1:50m Natural Earth borders simplified to 8% of their points by `scripts/build-borders.mjs`. Full detail took ~6 s to build into globe geometry; this takes ~0.2 s. 1:110m isn't an option because it drops 64 small countries.
   - Countries are keyed by **ISO alpha-3** (via `i18n-iso-countries` numeric→alpha3). The `SPECIAL` map fixes shapes with missing or duplicate codes, e.g. Kosovo, and Ashmore & Cartier sharing Australia's id. Other code-less shapes get an `X-…` key.
   - Bubble position = centroid of the country's largest polygon.
 - `components/Globe.tsx` wraps `react-globe.gl` (three.js). Non-obvious points:
@@ -55,13 +58,18 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - **Clicking a country:** clicking an unlocked country or a bubble flies the camera there (`FLY_MS`), then navigates.
   - **Remembered view:** the camera position is kept in a module variable plus `sessionStorage` (`savePov`), so returning to `/` restores the same view.
   - **Clouds:** a plain three.js group added via `globe.scene()`.
-  - **Cities and bubbles** share globe.gl's single HTML-element layer (`markers`, a `kind` union). `buildMarker` must stay a stable `useCallback`; otherwise every hover re-render rebuilds ~450 DOM elements.
+  - **Terrain:** unlocked countries get a relief model (`lib/terrain.ts`) rendered as globe.gl's custom layer, so hover and click work on it.
+    - Heights come from `src/data/elevation.png` (grayscale, equirectangular), via `three-conic-polygon-geometry` with a `topHeight(lng, lat)` function.
+    - `TERRAIN_SCALE` sets the exaggeration (~9×). The user asked for it not to look exaggerated, so keep it modest.
+    - The library misplaces some triangles outside large concave countries at fine resolutions; `dropTrianglesOutside` removes them.
+    - Unlocked polygon caps sit flat underneath the terrain, at the same altitude as locked ones.
+  - **Cities and bubbles** (cities only for unlocked countries; bubbles one per place pin plus one centre bubble for unplaced photos) share globe.gl's single HTML-element layer (`markers`, a `kind` union). `buildMarker` must stay a stable `useCallback`; otherwise every hover re-render rebuilds ~450 DOM elements.
   - **City names by zoom:** `handleZoom` toggles `show-capital-names` / `show-city-names` classes on the wrapper div directly, with no React state, so the globe doesn't re-render.
   - **City data:** `src/data/cities.json` is generated. Edit `scripts/build-cities.mjs` (size thresholds, `CAPITAL_OVERRIDE`, `MIN_GAP_KM`) and rerun `node scripts/build-cities.mjs` from the repo root rather than hand-editing the JSON.
   - **Type cast:** `polygonGeoJsonGeometry` needs an `as never` cast because the library's own GeoJSON types are too narrow.
 - **Flags:** Windows can't render flag emoji. Use the `flag-icons` CSS through `<Flag>` or `flagHtml()` (the latter for raw-HTML contexts like globe tooltips).
 - `pages/CountryPage.tsx` picks the view component by theme (`PhotoGrid` = classic, `AirplaneGallery` = airplane). Edit mode always uses the shared `EditablePhotoGrid`, whatever the theme.
-  - **Edit mode** works on a local `draft` (order, captions, cover). Save sends only the diffs: `PUT order`, `PATCH` captions, `PUT cover`. Deletes happen immediately.
+  - **Edit mode** works on a local `draft` (order, captions, locations, cover). Save sends only the diffs: `PUT order`, `PATCH` captions and locations, `PUT cover`. Deletes happen immediately.
   - **Adding a theme:** add its id to both lists, write a gallery component, add a branch in `CountryPage` and a preview in `ThemePreview`.
 - **Back button:** it uses `navigate(-1)` when `history.state.idx > 0`, so browser Back/Forward stay consistent.
 - Uploads use XHR (`api.upload`) for progress events.
@@ -74,6 +82,9 @@ There are no automated tests. To check visuals, drive the installed Microsoft Ed
 - **Test data:** test uploads go into the real `data/`, so delete them through the API afterwards. The user has real photos there, so never delete anything you didn't create, and reset `default_theme` if you changed it.
 - **Stale processes:** background dev servers from earlier sessions can survive and keep ports 3001/5173, which makes tests hit a stale app or hang. Before testing, check `Get-NetTCPConnection -LocalPort 3001,5173` and stop leftover `node` / headless `msedge` processes.
 - **Git Bash paths:** Git Bash rewrites arguments like `/country/JPN` into Windows paths. Pass URL paths without the leading slash.
+- **Auto-spin:** the globe auto-rotates, so screenshots drift from the requested view. Set `sessionStorage['globe-pov']` before load (addInitScript) to aim the camera.
+- **Starting the dev server for the user:** this session's PATH may predate the Node install. To open a terminal window for the user, rebuild `$env:Path` from the Machine and User values first, otherwise `npm` isn't found.
+- **Shell quoting:** the Bash tool can choke on heredocs that mix apostrophes and backticks. Put multi-line edit scripts in a scratch file and run that.
 
 ## Workflow
 
