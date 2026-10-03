@@ -27,11 +27,12 @@ const COLORS = {
 
 // Narrow (phone) screens need the camera further out to fit the whole globe.
 type Marker =
-  | { kind: 'city'; lat: number; lng: number; name: string; capital: boolean }
+  | { kind: 'city'; iso: string; lat: number; lng: number; name: string; capital: boolean }
   | { kind: 'bubble'; lat: number; lng: number; country: Country; count: number; coverUrl: string };
 
-const CITY_MARKERS: Marker[] = cities.map((c) => ({
+const CITY_MARKERS = cities.map((c): Marker & { kind: 'city' } => ({
   kind: 'city',
+  iso: c.iso,
   lat: c.lat,
   lng: c.lng,
   name: c.name,
@@ -187,13 +188,14 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
   // Cities and photo bubbles share globe.gl's single HTML-element layer.
   const markers = useMemo<Marker[]>(
     () => [
-      ...CITY_MARKERS,
+      // Cities only appear once their country is unlocked.
+      ...CITY_MARKERS.filter((m) => unlockedSet.has(m.iso)),
       ...unlocked.flatMap((u): Marker[] => {
         const c = getCountry(u.iso);
         return c ? [{ kind: 'bubble', lat: c.lat, lng: c.lng, country: c, count: u.count, coverUrl: u.coverUrl }] : [];
       }),
     ],
-    [unlocked],
+    [unlocked, unlockedSet],
   );
 
   // Stable so globe.gl doesn't rebuild ~450 elements on every hover re-render.
