@@ -26,11 +26,11 @@
   height: 0;
   transition: opacity 0.25s;
 }
-/* A balloon on a string: the photo floats above its spot so the city or symbol there stays visible. */
+/* The photo rests on the tip of a 3D stem rising from its spot (drawn in the globe), staying upright on screen. */
 .photo-bubble {
   position: absolute;
   left: 50%;
-  bottom: 46px;
+  bottom: 7px;
   translate: -50% 0;
   display: block;
   width: 58px;
@@ -41,7 +41,6 @@
   background: white;
   box-shadow: var(--shadow);
   cursor: pointer;
-  animation: float 3s ease-in-out infinite;
   transition: width 0.15s, height 0.15s;
 }
 .photo-bubble img {
@@ -58,10 +57,9 @@
   left: 50%;
   top: 100%;
   translate: -50% 0;
-  width: 2px;
-  height: 46px;
-  border-radius: 1px;
-  background: var(--ink);
+  border: 5px solid transparent;
+  border-top: 7px solid var(--ink);
+  border-bottom: 0;
 }
 .photo-bubble:hover {
   width: 74px;

@@ -1,43 +1,39 @@
 import * as THREE from 'three';
-import type { Country } from './countries';
-import { featureTest, polygonSurface, toVector } from './sphere';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { polygonSurface, toVector } from './sphere';
 
-/** Lakes sit just above the country caps (0.007) and below the border lines (0.0075). */
-const LAKE_ALT = 0.0071;
-const SHORE_ALT = 0.0073;
+/**
+ * Lakes are part of the base globe, drawn for every country whether unlocked or not. They sit above
+ * both the country caps (0.007) and the province caps (0.0074), so provinces never hide them.
+ */
+const LAKE_ALT = 0.0078;
+const SHORE_ALT = 0.008;
 const SHORE_WIDTH = 0.1;
-
-const waterMaterial = new THREE.MeshLambertMaterial({ color: '#7fcff5', side: THREE.DoubleSide });
-const shoreMaterial = new THREE.MeshBasicMaterial({ color: '#3b86c4', side: THREE.DoubleSide });
 
 type Lake = { name: string; polygons: number[][][][] };
 
-let lakes: Promise<Lake[]> | null = null;
-
-/** Large lakes (scripts/build-lakes.mjs), loaded only once a country is unlocked. */
+/** Large lakes (scripts/build-lakes.mjs), loaded separately so they don't slow the first paint. */
 export function loadLakes(): Promise<Lake[]> {
-  lakes ??= import('../data/lakes.json').then((m) => m.default as Lake[]);
-  return lakes;
+  return import('../data/lakes.json').then((m) => m.default as Lake[]);
 }
 
-/** The lakes touching an unlocked country, as blue water with a darker drawn shoreline. */
-export function buildLakes(country: Country, all: Lake[]): THREE.Group {
-  const contains = featureTest(country.feature);
-  const group = new THREE.Group();
+/** Every lake as one water mesh plus one darker shoreline mesh. */
+export function buildAllLakes(lakes: Lake[]): THREE.Group {
+  const fills: THREE.BufferGeometry[] = [];
   const shore = { positions: [] as number[], indices: [] as number[] };
-  for (const lake of all) {
+  for (const lake of lakes) {
     for (const coords of lake.polygons) {
-      if (!coords[0]?.some(contains)) continue;
-      group.add(new THREE.Mesh(polygonSurface(coords, LAKE_ALT, 1, false).top, waterMaterial));
+      if (!coords[0]) continue;
+      fills.push(polygonSurface(coords, LAKE_ALT, 1, false).top);
       for (const ring of coords) ribbon(ring.map(([lng, lat]) => toVector(lat, lng, SHORE_ALT)), shore.positions, shore.indices);
     }
   }
-  if (shore.indices.length) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(shore.positions, 3));
-    geo.setIndex(shore.indices);
-    group.add(new THREE.Mesh(geo, shoreMaterial));
-  }
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(mergeGeometries(fills)!, new THREE.MeshLambertMaterial({ color: '#7fcff5', side: THREE.DoubleSide })));
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(shore.positions, 3));
+  geo.setIndex(shore.indices);
+  group.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#3b86c4', side: THREE.DoubleSide })));
   return group;
 }
 

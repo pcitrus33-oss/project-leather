@@ -21,6 +21,8 @@ export interface Pin extends Location {
   province: string | null;
   count: number;
   thumbUrl: string;
+  /** Newest upload at this place (ISO time). */
+  latestAt: string;
 }
 
 export interface Photo {
@@ -41,6 +43,7 @@ export interface UnlockedProvince {
   id: string;
   count: number;
   unplacedCount: number;
+  unplacedLatestAt: string | null;
   unlockedAt: string;
   coverUrl: string;
 }
@@ -53,6 +56,7 @@ export interface UnlockedCountry {
   coverUrl: string;
   /** Photos with neither a place nor a province; shown as one bubble at the country's centre. */
   unplacedCount: number;
+  unplacedLatestAt: string | null;
   pins: Pin[];
   provinces: UnlockedProvince[];
 }

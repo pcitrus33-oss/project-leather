@@ -4,10 +4,11 @@ import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
 import { PROVINCES, hasProvinces, type Province } from '../lib/provinces';
 import cities from '../data/cities.json';
-import { buildLakes, loadLakes } from '../lib/lakes';
+import { buildAllLakes, loadLakes } from '../lib/lakes';
+import { installCameraTilt } from '../lib/cameraTilt';
 import { cityIconHtml, placeIconHtml, type CityRank } from './mapIcons';
 import { buildLandMesh, type LandMesh } from '../lib/landMesh';
-import { featureTest } from '../lib/sphere';
+import { featureTest, R, toVector } from '../lib/sphere';
 import type { PlaceKind, UnlockedCountry } from '../lib/api';
 import './Globe.css';
 
@@ -58,7 +59,7 @@ type CityMarker = {
 type Marker =
   | CityMarker
   | { kind: 'place'; place: PlaceKind; lat: number; lng: number; name: string }
-  | { kind: 'bubble'; lat: number; lng: number; target: GlobeTarget; count: number; thumbUrl: string; label: string };
+  | { kind: 'bubble'; lat: number; lng: number; target: GlobeTarget; count: number; thumbUrl: string; label: string; latestAt: string };
 
 /** Every possible city marker: country capitals, the biggest cities, and province capitals. */
 const ALL_CITIES: CityMarker[] = (() => {
@@ -87,7 +88,40 @@ const ALL_CITIES: CityMarker[] = (() => {
   return [...provinceCapitals, ...others];
 })();
 
-const markerAltitude = (d: object) => ((d as Marker).kind === 'bubble' ? 0.05 : 0.008);
+/** Photo bubbles sit on top of a short stem rising straight out of their spot. */
+const STEM_ALT = 0.035;
+const markerAltitude = (d: object) => ((d as Marker).kind === 'bubble' ? STEM_ALT : 0.008);
+
+/** At most this many photo bubbles on the globe: half the most recent places, half picked at random. */
+const MAX_BUBBLES = 20;
+function pickBubbles<T extends { latestAt: string }>(all: T[]): T[] {
+  if (all.length <= MAX_BUBBLES) return all;
+  const byNewest = [...all].sort((a, b) => b.latestAt.localeCompare(a.latestAt));
+  const newest = byNewest.slice(0, MAX_BUBBLES / 2);
+  const rest = byNewest.slice(MAX_BUBBLES / 2);
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  return [...newest, ...rest.slice(0, MAX_BUBBLES - newest.length)];
+}
+
+/** Thin ink stems from each bubble's spot up to the bubble, as one instanced mesh. */
+const STEM_GEO = new THREE.CylinderGeometry(0.11, 0.11, 1, 6).translate(0, 0.5, 0);
+const STEM_MATERIAL = new THREE.MeshBasicMaterial({ color: '#2b3a67' });
+function buildStems(spots: { lat: number; lng: number }[]) {
+  const mesh = new THREE.InstancedMesh(STEM_GEO, STEM_MATERIAL, Math.max(spots.length, 1));
+  mesh.count = spots.length;
+  const up = new THREE.Vector3(0, 1, 0);
+  const base = new THREE.Vector3();
+  const length = R * (STEM_ALT - COUNTRY_ALT);
+  spots.forEach((s, i) => {
+    toVector(s.lat, s.lng, COUNTRY_ALT, base);
+    const q = new THREE.Quaternion().setFromUnitVectors(up, base.clone().normalize());
+    mesh.setMatrixAt(i, new THREE.Matrix4().compose(base, q, new THREE.Vector3(1, length, 1)));
+  });
+  return mesh;
+}
 
 const DEFAULT_POV = { lat: 25, lng: 10, altitude: window.innerWidth < 600 ? 3.8 : 2.3 };
 const FLY_MS = 900;
@@ -148,6 +182,9 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
   /** "c:ISO" or "p:PROVINCE" under the pointer. */
   const [hovered, setHovered] = useState<string | null>(null);
   const flyingRef = useRef(false);
+  const tiltRef = useRef<ReturnType<typeof installCameraTilt> | null>(null);
+  /** The view to remember: without the camera tilt, so restoring it doesn't drift. */
+  const currentPov = () => tiltRef.current?.untiltedPov() ?? globeRef.current!.pointOfView();
   const resumeTimer = useRef<number | undefined>(undefined);
   const zoomedInRef = useRef(false);
 
@@ -156,30 +193,6 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
   const unlockedProvinces = useMemo(() => new Set(unlocked.flatMap((u) => u.provinces.map((p) => p.id))), [unlocked]);
   const shownCountry = useCallback((iso: string) => revealAll || unlockedCountries.has(iso), [revealAll, unlockedCountries]);
   const shownProvince = useCallback((id: string) => revealAll || unlockedProvinces.has(id), [revealAll, unlockedProvinces]);
-
-  // Large lakes on (shown) unlocked countries, built once per country after the lake data loads.
-  const [lakes, setLakes] = useState<{ country: Country; obj: THREE.Object3D }[]>([]);
-  const lakeCache = useRef(new Map<string, THREE.Object3D>());
-  useEffect(() => {
-    let cancelled = false;
-    const countries = COUNTRIES.filter((c) => shownCountry(c.iso));
-    if (countries.length === 0) return setLakes([]);
-    loadLakes()
-      .then((all) => {
-        if (cancelled) return;
-        setLakes(
-          countries.map((country) => {
-            let obj = lakeCache.current.get(country.iso);
-            if (!obj) lakeCache.current.set(country.iso, (obj = buildLakes(country, all)));
-            return { country, obj };
-          }),
-        );
-      })
-      .catch((e) => console.error(e));
-    return () => {
-      cancelled = true;
-    };
-  }, [shownCountry]);
 
   const tooltip = useCallback(
     ({ country, province }: GlobeTarget) => {
@@ -244,7 +257,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     const globe = globeRef.current;
     if (!globe || flyingRef.current) return;
     flyingRef.current = true;
-    savePov(globe.pointOfView());
+    savePov(currentPov());
     globe.controls().autoRotate = false;
     const spot = province ?? country;
     globe.pointOfView({ lat: lat ?? spot.lat, lng: lng ?? spot.lng, altitude: 0.9 }, FLY_MS);
@@ -293,6 +306,12 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
 
     globe.pointOfView(savedPov ?? DEFAULT_POV, 0);
     handleZoom(globe.pointOfView());
+    tiltRef.current = installCameraTilt(globe);
+
+    // Lakes belong to the base globe: drawn everywhere, above countries and provinces.
+    loadLakes()
+      .then((all) => globe.scene().add(buildAllLakes(all)))
+      .catch((e) => console.error(e));
 
     // The default light sits fixed over the North Pole; this "sun" follows the camera from the
     // upper left instead, so every country is lit the same way.
@@ -361,7 +380,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
       window.clearTimeout(resumeTimer.current);
       const globe = globeRef.current;
       if (!globe) return;
-      if (!flyingRef.current) savePov(globe.pointOfView());
+      if (!flyingRef.current) savePov(currentPov());
       globe.scene().getObjectByName('clouds')?.userData.stop?.();
     },
     [],
@@ -372,6 +391,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     // Cities appear once their country (or, for USA/Canada/China, their province) is unlocked.
     const visibleCities = ALL_CITIES.filter((m) => (m.province ? shownProvince(m.province) : shownCountry(m.iso)));
     const out: Marker[] = [...visibleCities];
+    const bubbles: (Marker & { kind: 'bubble' })[] = [];
 
     for (const u of unlocked) {
       const country = getCountry(u.iso);
@@ -382,7 +402,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
         if (!visibleCities.some((c) => Math.hypot(c.lat - p.lat, c.lng - p.lng) < 0.25)) {
           out.push({ kind: 'place', place: p.kind, lat: p.lat, lng: p.lng, name: p.name });
         }
-        out.push({
+        bubbles.push({
           kind: 'bubble',
           lat: p.lat,
           lng: p.lng,
@@ -390,21 +410,52 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
           count: p.count,
           thumbUrl: p.thumbUrl,
           label: `${p.name || (province ?? country).name}, ${(province ?? country).name}`,
+          latestAt: p.latestAt,
         });
       }
       // Photos without a place: one bubble at the centre of their province, or of the country.
       for (const p of u.provinces) {
         const province = PROVINCES.find((x) => x.id === p.id);
         if (province && p.unplacedCount > 0) {
-          out.push({ kind: 'bubble', lat: province.lat, lng: province.lng, target: { country, province }, count: p.unplacedCount, thumbUrl: p.coverUrl, label: `${province.name}, ${country.name}` });
+          bubbles.push({
+            kind: 'bubble',
+            lat: province.lat,
+            lng: province.lng,
+            target: { country, province },
+            count: p.unplacedCount,
+            thumbUrl: p.coverUrl,
+            label: `${province.name}, ${country.name}`,
+            latestAt: p.unplacedLatestAt ?? '',
+          });
         }
       }
       if (u.unplacedCount > 0) {
-        out.push({ kind: 'bubble', lat: country.lat, lng: country.lng, target: { country, province: null }, count: u.unplacedCount, thumbUrl: u.coverUrl, label: country.name });
+        bubbles.push({
+          kind: 'bubble',
+          lat: country.lat,
+          lng: country.lng,
+          target: { country, province: null },
+          count: u.unplacedCount,
+          thumbUrl: u.coverUrl,
+          label: country.name,
+          latestAt: u.unplacedLatestAt ?? '',
+        });
       }
     }
-    return out;
+    return [...out, ...pickBubbles(bubbles)];
   }, [unlocked, shownCountry, shownProvince]);
+
+  // A stem under each shown bubble, rebuilt when the bubbles change.
+  useEffect(() => {
+    const globe = globeRef.current;
+    if (!globe || !landReady) return;
+    const stems = buildStems(markers.filter((m) => m.kind === 'bubble'));
+    globe.scene().add(stems);
+    return () => {
+      globe.scene().remove(stems);
+      stems.dispose();
+    };
+  }, [markers, landReady]);
 
   // Stable so globe.gl doesn't rebuild every marker on each hover re-render.
   const buildMarker = useCallback(
@@ -458,12 +509,6 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
           const open = t.province ? unlockedProvinces.has(t.province.id) : unlockedCountries.has(t.country.iso);
           if (open) flyTo(t);
           else onLockedClick(t, event.clientX, event.clientY);
-        }}
-        customLayerData={lakes}
-        customThreeObject={(d) => (d as (typeof lakes)[number]).obj}
-        onCustomLayerClick={(d) => {
-          const country = (d as (typeof lakes)[number]).country;
-          if (unlockedCountries.has(country.iso)) flyTo({ country, province: null });
         }}
         onZoom={handleZoom}
         htmlElementsData={markers}
