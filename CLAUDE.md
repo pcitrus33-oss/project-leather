@@ -49,20 +49,31 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
 
 **Client (`client/src`)**
 - `lib/countries.ts` builds the country list at load time from `src/data/countries.json`.
-  - **Borders:** the file is the 1:50m Natural Earth borders simplified to 8% of their points by `scripts/build-borders.mjs`. Full detail took ~6 s to build into globe geometry; this takes ~0.2 s. 1:110m isn't an option because it drops 64 small countries.
+  - **Borders:** the file is the 1:50m Natural Earth borders simplified by `scripts/build-borders.mjs` to 70% of their points, with small countries (< 30,000 km²) kept whole. That loads and builds in ~1 s in the browser, which is the user's target. 1:110m isn't an option because it drops 64 small countries.
   - Countries are keyed by **ISO alpha-3** (via `i18n-iso-countries` numeric→alpha3). The `SPECIAL` map fixes shapes with missing or duplicate codes, e.g. Kosovo, and Ashmore & Cartier sharing Australia's id. Other code-less shapes get an `X-…` key.
   - Bubble position = centroid of the country's largest polygon.
 - `components/Globe.tsx` wraps `react-globe.gl` (three.js). Non-obvious points:
+  - **Countries are NOT a globe.gl polygon layer.** `lib/landMesh.ts` merges all 1,616 country pieces into one mesh plus one `LineSegments` of borders, added via `globe.scene()`. As separate polygons it was ~4,800 draw calls and ~10 fps on the user's Intel Iris Xe; merged it's ~70–90 fps.
+    - **Hover:** a `pointermove` listener on the canvas, using `globe.toGlobeCoords` then `land.countryAt`. The tooltip is our own `.globe-tip-floating` div.
+    - **Clicks:** `onGlobeClick` → `countryAt`, plus `onCustomLayerClick` for clicks on terrain.
+    - **Colours:** `setColor` repaints a country's vertex range.
+    - **Picking:** globe.gl only raycasts its own layers, so the merged mesh doesn't block picking.
+  - **`lib/sphere.ts`** holds the shared geometry helpers. Use them instead of three-conic-polygon-geometry and d3 `geoContains`, both measured as far too slow here:
+    - `toVector`/`toLatLng` match three-globe's coordinates.
+    - `polygonTest`/`featureTest` is a fast flat point-in-polygon test, with a `geoContains` fallback for date-line rings.
+    - `polygonSurface` builds flat polygon tops and sides with earcut, plus longest-edge subdivision so big triangles follow the curve.
   - **HTML bubbles:** globe.gl positions each element with its own CSS `transform`. Animations and hover sizing must go on the **inner** `.photo-bubble` button, never on the anchor element it returns.
   - **Callbacks:** bubble DOM is built by hand, so callbacks reach it through refs (`openRef`, `flyRef`).
   - **Clicking a country:** clicking an unlocked country or a bubble flies the camera there (`FLY_MS`), then navigates.
   - **Remembered view:** the camera position is kept in a module variable plus `sessionStorage` (`savePov`), so returning to `/` restores the same view.
   - **Clouds:** a plain three.js group added via `globe.scene()`.
-  - **Terrain:** unlocked countries get a relief model (`lib/terrain.ts`) rendered as globe.gl's custom layer, so hover and click work on it.
-    - Heights come from `src/data/elevation.png` (grayscale, equirectangular), via `three-conic-polygon-geometry` with a `topHeight(lng, lat)` function.
-    - `TERRAIN_SCALE` sets the exaggeration (~9×). The user asked for it not to look exaggerated, so keep it modest.
-    - The library misplaces some triangles outside large concave countries at fine resolutions; `dropTrianglesOutside` removes them.
-    - Unlocked polygon caps sit flat underneath the terrain, at the same altitude as locked ones.
+  - **Terrain:** unlocked countries get a painted cartoon landscape (`lib/terrain.ts`), rendered as globe.gl's custom layer.
+    - **Land:** flat land with noise-painted green "fields".
+    - **Water:** lakes, and rivers as ribbons with darker edges, both from `src/data/water.json` (Natural Earth 1:50m, via `scripts/build-water.mjs`, loaded lazily).
+    - **Mountains:** instanced low-poly cones with ink outlines (an inverted hull) and boulders, placed on a jittered grid wherever `elevation.png` exceeds `MOUNTAIN_MIN`. Snow above `SNOW_MIN`.
+    - **Style the user asked for:** fully painted, gray rocky mountain sides, no height-based colour ramp, cartoon not realistic.
+    - **Lighting:** a "sun" directional light follows the camera from the upper left. The default globe.gl light was fixed over the North Pole.
+    - **Shadows:** cast by mountains (`SHADOWS_ENABLED`). Measured cost was negligible (~2%).
   - **Cities and bubbles** (cities only for unlocked countries; bubbles one per place pin plus one centre bubble for unplaced photos) share globe.gl's single HTML-element layer (`markers`, a `kind` union). `buildMarker` must stay a stable `useCallback`; otherwise every hover re-render rebuilds ~450 DOM elements.
   - **City names by zoom:** `handleZoom` toggles `show-capital-names` / `show-city-names` classes on the wrapper div directly, with no React state, so the globe doesn't re-render.
   - **City data:** `src/data/cities.json` is generated. Edit `scripts/build-cities.mjs` (size thresholds, `CAPITAL_OVERRIDE`, `MIN_GAP_KM`) and rerun `node scripts/build-cities.mjs` from the repo root rather than hand-editing the JSON.
@@ -82,7 +93,8 @@ There are no automated tests. To check visuals, drive the installed Microsoft Ed
 - **Test data:** test uploads go into the real `data/`, so delete them through the API afterwards. The user has real photos there, so never delete anything you didn't create, and reset `default_theme` if you changed it.
 - **Stale processes:** background dev servers from earlier sessions can survive and keep ports 3001/5173, which makes tests hit a stale app or hang. Before testing, check `Get-NetTCPConnection -LocalPort 3001,5173` and stop leftover `node` / headless `msedge` processes.
 - **Git Bash paths:** Git Bash rewrites arguments like `/country/JPN` into Windows paths. Pass URL paths without the leading slash.
-- **Auto-spin:** the globe auto-rotates, so screenshots drift from the requested view. Set `sessionStorage['globe-pov']` before load (addInitScript) to aim the camera.
+- **Auto-spin:** the globe auto-rotates, so screenshots drift from the requested view. Set `sessionStorage['globe-pov']` before load (addInitScript) to aim the camera. For hover/click tests, hover a point, read the tooltip, then click immediately (hovering a country pauses the spin).
+- **Real performance numbers:** headless Edge can use the real GPU (`--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`), which gives the user's Intel Iris Xe frame rates. SwiftShader numbers (~0.5 fps) are meaningless. A bare WebGL canvas reaches ~144 fps there, so compare against that.
 - **Starting the dev server for the user:** this session's PATH may predate the Node install. To open a terminal window for the user, rebuild `$env:Path` from the Machine and User values first, otherwise `npm` isn't found.
 - **Shell quoting:** the Bash tool can choke on heredocs that mix apostrophes and backticks. Put multi-line edit scripts in a scratch file and run that.
 
