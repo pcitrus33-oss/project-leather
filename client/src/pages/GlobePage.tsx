@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import Globe, { type GlobeTarget } from '../components/Globe';
 import UnlockModal from '../components/UnlockModal';
-import { api, type UnlockedCountry, type UploadResult } from '../lib/api';
+import { api, type GlobeView, type UnlockedCountry, type UploadResult } from '../lib/api';
 import { celebrate } from '../lib/celebrate';
 import Flag from '../components/Flag';
 import PlaneIcon from '../components/PlaneIcon';
@@ -18,6 +18,14 @@ export default function GlobePage() {
   const [modal, setModal] = useState<{ open: boolean; iso?: string; province?: string }>({ open: false });
   const [lockedPopup, setLockedPopup] = useState<{ target: GlobeTarget; x: number; y: number } | null>(null);
   const revealAll = useRevealAll();
+  const [view, setView] = useState<GlobeView>('day');
+
+  useEffect(() => {
+    api
+      .settings()
+      .then((s) => setView(s.globeView))
+      .catch(() => {}); // the globe still works in the default view
+  }, []);
 
   const refresh = useCallback(
     () =>
@@ -52,6 +60,7 @@ export default function GlobePage() {
       <Globe
         unlocked={unlocked}
         revealAll={revealAll}
+        view={view}
         onOpen={(iso, province) => navigate(province ? `/country/${iso}/${province}` : `/country/${iso}`)}
         onLockedClick={(target, x, y) => setLockedPopup({ target, x, y })}
       />
@@ -68,24 +77,16 @@ export default function GlobePage() {
             <PlaneIcon />
           </span>
         </motion.h1>
-        <motion.div
-          className="globe-stats"
-          initial={{ y: -40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.1 }}
-        >
-          <span className="chip">🗺️ {unlocked.length} {unlocked.length === 1 ? 'country' : 'countries'}</span>
-          <span className="chip">📸 {photoTotal} photos</span>
-          {DEV && (
-            <Link to="/settings" className="chip dev-chip" title="Developer site: sandbox data, see Settings for tools">
-              🛠️ Developer{revealAll ? ' · showing everything' : ''}
-            </Link>
-          )}
-          <Link to="/settings" className="btn btn-icon" title="Settings" aria-label="Settings">
-            ⚙️
-          </Link>
-        </motion.div>
       </header>
+
+      <Dock
+        // Keep it out while there's nothing on the globe yet, so "Unlock a country" is easy to find.
+        pinned={loaded && unlocked.length === 0}
+        countries={unlocked.length}
+        photos={photoTotal}
+        onUnlock={() => setModal({ open: true })}
+        revealAll={revealAll}
+      />
 
       {loadError && <div className="globe-alert chip">😿 Can’t reach the photo server — is it running?</div>}
 
@@ -97,21 +98,10 @@ export default function GlobePage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
           >
-            Your globe is all gray! Unlock your first country 👇
+            Your globe is all gray! Unlock your first country from the menu 👉
           </motion.div>
         )}
       </AnimatePresence>
-
-      <motion.div
-        className="globe-actions"
-        initial={{ y: 80 }}
-        animate={{ y: 0 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.2 }}
-      >
-        <button className="btn btn-pink btn-big" onClick={() => setModal({ open: true })}>
-          🔓 Unlock a country
-        </button>
-      </motion.div>
 
       <AnimatePresence>
         {lockedPopup && (
@@ -156,5 +146,78 @@ export default function GlobePage() {
         onUploaded={handleUploaded}
       />
     </div>
+  );
+}
+
+const DOCK_HIDE_DELAY_MS = 700;
+
+/**
+ * The globe's menu, like a taskbar standing on the right edge: tucked away off-screen with only a tab
+ * showing, and sliding out when the pointer comes near (or the tab is clicked, for touch screens).
+ */
+function Dock({
+  pinned,
+  countries,
+  photos,
+  onUnlock,
+  revealAll,
+}: {
+  pinned: boolean;
+  countries: number;
+  photos: number;
+  onUnlock: () => void;
+  revealAll: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const hideTimer = useRef<number | undefined>(undefined);
+  const show = () => {
+    window.clearTimeout(hideTimer.current);
+    setOpen(true);
+  };
+  const hideSoon = () => {
+    window.clearTimeout(hideTimer.current);
+    hideTimer.current = window.setTimeout(() => setOpen(false), DOCK_HIDE_DELAY_MS);
+  };
+  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
+  const isOpen = open || pinned;
+
+  return (
+    <nav
+      className={`globe-dock ${isOpen ? 'is-open' : ''}`}
+      onPointerEnter={show}
+      onPointerLeave={hideSoon}
+      onPointerDown={(e) => e.stopPropagation()}
+      aria-label="Globe menu"
+    >
+      <button
+        className="globe-dock-tab"
+        onClick={() => (isOpen ? setOpen(false) : show())}
+        aria-expanded={isOpen}
+        aria-label={isOpen ? 'Hide menu' : 'Show menu'}
+      >
+        {isOpen ? '›' : '‹'}
+      </button>
+      <div className="globe-dock-panel card">
+        <div className="globe-dock-stat">
+          <b>{countries}</b>
+          <span>🗺️ {countries === 1 ? 'Country' : 'Countries'} visited</span>
+        </div>
+        <div className="globe-dock-stat">
+          <b>{photos}</b>
+          <span>📸 {photos === 1 ? 'Photo' : 'Photos'} uploaded</span>
+        </div>
+        <button className="btn btn-pink" onClick={onUnlock}>
+          🔓 Unlock a country
+        </button>
+        <Link to="/settings" className="btn">
+          ⚙️ Settings
+        </Link>
+        {DEV && (
+          <Link to="/settings" className="chip dev-chip" title="Developer site: sandbox data, see Settings for tools">
+            🛠️ Developer{revealAll ? ' · all shown' : ''}
+          </Link>
+        )}
+      </div>
+    </nav>
   );
 }

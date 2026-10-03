@@ -60,28 +60,11 @@
   }
 }
 
-.globe-stats .btn-icon {
-  font-size: 1.1rem;
-}
-
-.globe-stats {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.globe-actions {
-  position: absolute;
-  z-index: 5;
-  bottom: 28px;
-  left: 50%;
-  translate: -50% 0;
-}
 
 .globe-hint {
   z-index: 5;
   position: absolute;
-  bottom: 112px;
+  bottom: 28px;
   left: 50%;
   translate: -50% 0;
   padding: 12px 20px;
@@ -120,9 +103,6 @@
   .globe-header {
     padding: 12px 16px;
   }
-  .globe-actions {
-    bottom: 20px;
-  }
 }
 
 /* Developer site badge */
@@ -130,4 +110,73 @@
   background: var(--yellow);
   text-decoration: none;
   color: var(--ink);
+}
+
+/* ---------- Right-hand dock (the globe's menu) ---------- */
+.globe-dock {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  translate: 0 -50%;
+  /* Tucked away: only the tab peeks out from the right edge. */
+  transform: translateX(calc(100% - 34px));
+  transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.globe-dock.is-open {
+  transform: translateX(0);
+}
+.globe-dock-tab {
+  flex: none;
+  width: 34px;
+  height: 84px;
+  padding: 0;
+  border: var(--border);
+  border-right: none;
+  border-radius: 18px 0 0 18px;
+  background: var(--yellow);
+  box-shadow: var(--shadow);
+  font-family: var(--font);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+}
+.globe-dock-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 210px;
+  padding: 16px;
+  margin-right: 14px;
+}
+.globe-dock-panel .btn {
+  justify-content: center;
+}
+.globe-dock-panel a.btn {
+  color: var(--ink);
+}
+.globe-dock-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  background: white;
+}
+.globe-dock-stat b {
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+.globe-dock-stat span {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.globe-dock .dev-chip {
+  justify-content: center;
 }
