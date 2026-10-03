@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 import type { Country } from '../lib/countries';
+import type { Province } from '../lib/provinces';
 
-/** A little flat cartoon outline of the country for the page header. */
-export default function CountrySilhouette({ country, size = 96 }: { country: Country; size?: number }) {
+/** A little flat cartoon outline of a country (or province) for the page header. */
+export default function CountrySilhouette({ country, size = 96 }: { country: Country | Province; size?: number }) {
   const d = useMemo(() => {
     // Rotate to the country first so shapes crossing the date line (Russia, Fiji) stay in one piece.
     const projection = geoMercator()

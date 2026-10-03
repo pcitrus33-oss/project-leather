@@ -8,6 +8,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<GlobePage />} />
       <Route path="/country/:iso" element={<CountryPage />} />
+      <Route path="/country/:iso/:province" element={<CountryPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="*" element={<GlobePage />} />
     </Routes>

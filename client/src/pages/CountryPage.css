@@ -113,3 +113,76 @@
     height: 72px;
   }
 }
+
+/* Province pages: two ways back, on their own row above the title */
+.country-back {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex-basis: 100%;
+}
+
+/* Catalogue of unlocked provinces (USA, Canada, China) */
+.province-catalogue {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.province-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px 12px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.province-row:hover {
+  transform: translateY(-3px) rotate(-0.4deg);
+}
+.province-row img {
+  flex: none;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: var(--border);
+  border-radius: 16px;
+  background: #eef1f7;
+}
+.province-row-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.province-row-text b {
+  font-size: 1.5rem;
+}
+.province-row-text span {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.province-row-go {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+.province-catalogue-hint {
+  text-align: center;
+  color: var(--ink-soft);
+  padding: 8px;
+}
+@media (max-width: 600px) {
+  .province-row img {
+    width: 84px;
+    height: 84px;
+  }
+  .province-row-text b {
+    font-size: 1.2rem;
+  }
+}
