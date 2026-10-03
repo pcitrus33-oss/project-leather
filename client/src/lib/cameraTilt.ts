@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { GlobeMethods } from 'react-globe.gl';
 
-/** Camera tilt away from straight-down at the closest zoom: 28° ≈ a 62° view of the surface. */
-const MAX_TILT = THREE.MathUtils.degToRad(28);
+/** Camera tilt away from straight-down at the closest zoom: 35° ≈ a 55° view of the surface. */
+const MAX_TILT = THREE.MathUtils.degToRad(35);
 /** Above this altitude (fraction of the radius) the camera looks straight down. */
 const TILT_START_ALT = 1.6;
 /** The closest the controls allow (minDistance = 1.25 R). */
