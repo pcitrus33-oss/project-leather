@@ -127,7 +127,7 @@ There are no automated tests. To check visuals, drive the installed Microsoft Ed
 
 ## Workflow
 
-- **Git:** the user wants every completed change committed with a clean, descriptive message and **pushed to GitHub**, so they can always revert. The remote is `origin` → `https://github.com/pcitrus33-oss/project-leather` (private), branch `main`. Keep commits small and logical. Releases are marked with tags like `v1.1`.
+- **Git:** the user wants every completed change committed with a clean, descriptive message and **pushed to GitHub**, so they can always revert. The remote is `origin` → `https://github.com/pcitrus33-oss/project-leather` (private), branch `main`. Keep commits small and logical. Releases are marked with tags like `v1.1`. To bump the version, edit the root `package.json` and run `npm install --package-lock-only`; never find-and-replace version strings in `package-lock.json` (other packages share them).
 - **Image formats:** HEIC uploads aren't supported, because the prebuilt sharp can't decode them.
 - **Deferred features:** EXIF GPS auto-country detection and a password-protected online deploy are planned for later. Don't build them unless asked.
   - **Pins:** clicking a pin currently opens the country/province page; the user said this will change later.
