@@ -1,10 +1,14 @@
 import type { ThemeId } from './themes';
 
+/** Kinds of tagged places, each with its own symbol on the globe (keep in sync with server/src/places.ts). */
+export type PlaceKind = 'city' | 'park' | 'mountain' | 'beach' | 'water' | 'island' | 'museum' | 'landmark' | 'airport' | 'pin';
+
 /** A place picked from the location search. */
 export interface Location {
   lat: number;
   lng: number;
   name: string;
+  kind: PlaceKind;
 }
 
 export interface PlaceResult extends Location {
@@ -14,6 +18,7 @@ export interface PlaceResult extends Location {
 
 /** A spot on the globe where one or more of a country's photos were taken. */
 export interface Pin extends Location {
+  province: string | null;
   count: number;
   thumbUrl: string;
 }
@@ -21,6 +26,7 @@ export interface Pin extends Location {
 export interface Photo {
   id: string;
   iso: string;
+  province: string | null;
   width: number;
   height: number;
   caption: string;
@@ -30,22 +36,34 @@ export interface Photo {
   location: Location | null;
 }
 
+/** An unlocked province (USA, Canada, China). */
+export interface UnlockedProvince {
+  id: string;
+  count: number;
+  unplacedCount: number;
+  unlockedAt: string;
+  coverUrl: string;
+}
+
 export interface UnlockedCountry {
   iso: string;
   count: number;
   unlockedAt: string;
   coverId: string;
   coverUrl: string;
-  /** Photos without a place; shown as one bubble at the country's centre. */
+  /** Photos with neither a place nor a province; shown as one bubble at the country's centre. */
   unplacedCount: number;
   pins: Pin[];
+  provinces: UnlockedProvince[];
 }
 
 export interface CountryPhotos {
   iso: string;
+  province: string | null;
   coverId: string | null;
   theme: ThemeId;
   photos: Photo[];
+  provinces: UnlockedProvince[];
 }
 
 export interface Settings {
@@ -71,14 +89,19 @@ const json = (method: string, data: unknown): RequestInit => ({
   body: JSON.stringify(data),
 });
 
+/** `?province=…` for province pages, nothing for whole countries. */
+const scopeQuery = (province?: string | null) => (province ? `?${new URLSearchParams({ province })}` : '');
+
 export const api = {
   countries: () => request<UnlockedCountry[]>('/api/countries'),
 
-  photos: (iso: string) => request<CountryPhotos>(`/api/countries/${iso}/photos`),
+  photos: (iso: string, province?: string | null) => request<CountryPhotos>(`/api/countries/${iso}/photos${scopeQuery(province)}`),
 
-  setOrder: (iso: string, ids: string[]) => request<{ photos: Photo[] }>(`/api/countries/${iso}/order`, json('PUT', { ids })),
+  setOrder: (iso: string, ids: string[], province?: string | null) =>
+    request<{ photos: Photo[] }>(`/api/countries/${iso}/order`, json('PUT', { ids, province })),
 
-  setCover: (iso: string, photoId: string) => request<{ coverId: string }>(`/api/countries/${iso}/cover`, json('PUT', { photoId })),
+  setCover: (iso: string, photoId: string, province?: string | null) =>
+    request<{ coverId: string }>(`/api/countries/${iso}/cover`, json('PUT', { photoId, province })),
 
   setCaption: (id: string, caption: string) => request<{ ok: true }>(`/api/photos/${id}`, json('PATCH', { caption })),
 
@@ -89,23 +112,39 @@ export const api = {
   searchPlaces: (q: string, alpha2?: string) =>
     request<PlaceResult[]>(`/api/geocode?${new URLSearchParams({ q, country: alpha2 ?? '' })}`),
 
-  setTheme: (iso: string, theme: ThemeId) => request<{ theme: ThemeId }>(`/api/countries/${iso}/theme`, json('PUT', { theme })),
+  setTheme: (iso: string, theme: ThemeId, province?: string | null) =>
+    request<{ theme: ThemeId }>(`/api/countries/${iso}/theme`, json('PUT', { theme, province })),
 
   settings: () => request<Settings>('/api/settings'),
 
   saveSettings: (settings: Settings) => request<Settings>('/api/settings', json('PUT', settings)),
 
-  deletePhoto: (id: string) => request<{ relocked: boolean }>(`/api/photos/${id}`, { method: 'DELETE' }),
+  deletePhoto: (id: string) =>
+    request<{ relocked: boolean; provinceRelocked: boolean }>(`/api/photos/${id}`, { method: 'DELETE' }),
+
+  /** Developer sandbox only (the real server has no /api/dev). */
+  dev: {
+    seed: () => request<{ added: number }>('/api/dev/seed', { method: 'POST' }),
+    reset: () => request<{ ok: true }>('/api/dev/reset', { method: 'POST' }),
+  },
 
   /** Uses XHR (not fetch) so we can report upload progress. */
-  upload(iso: string, files: File[], onProgress: (fraction: number) => void, location?: Location | null): Promise<UploadResult> {
+  upload(
+    iso: string,
+    files: File[],
+    onProgress: (fraction: number) => void,
+    location?: Location | null,
+    province?: string | null,
+  ): Promise<UploadResult> {
     return new Promise((resolve, reject) => {
       const form = new FormData();
       // Text fields go before the files so the server sees them alongside the upload.
+      if (province) form.append('province', province);
       if (location) {
         form.append('lat', String(location.lat));
         form.append('lng', String(location.lng));
         form.append('place', location.name);
+        form.append('kind', location.kind);
       }
       files.forEach((f) => form.append('photos', f));
       const xhr = new XMLHttpRequest();

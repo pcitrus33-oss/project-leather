@@ -59,7 +59,7 @@ export default function LocationSearch({ alpha2, onPick }: Props) {
         <ul className="location-results">
           {results.map((r) => (
             <li key={`${r.lat},${r.lng},${r.detail}`}>
-              <button onClick={() => onPick({ lat: r.lat, lng: r.lng, name: r.name })}>
+              <button onClick={() => onPick({ lat: r.lat, lng: r.lng, name: r.name, kind: r.kind })}>
                 <b>📍 {r.name}</b>
                 <span>{r.detail}</span>
               </button>

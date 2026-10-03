@@ -124,3 +124,10 @@
     bottom: 20px;
   }
 }
+
+/* Developer site badge */
+.dev-chip {
+  background: var(--yellow);
+  text-decoration: none;
+  color: var(--ink);
+}

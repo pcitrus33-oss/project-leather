@@ -62,9 +62,10 @@ const provinces = admin1.features
         lat: round(capital.geometry.coordinates[1]),
         lng: round(capital.geometry.coordinates[0]),
       }),
-      polygons: (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates).map((rings) =>
-        rings.map(thin).filter((r) => r.length >= 4),
-      ),
+      polygons: (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates)
+        // Thinning can shrink a tiny island's outline below a triangle; drop those islands entirely.
+        .filter((rings) => thin(rings[0]).length >= 4)
+        .map((rings) => rings.map(thin).filter((r) => r.length >= 4)),
     };
   })
   .sort((a, b) => a.iso.localeCompare(b.iso) || a.name.localeCompare(b.name));

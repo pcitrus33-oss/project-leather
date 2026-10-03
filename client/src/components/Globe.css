@@ -20,22 +20,29 @@
 
 /* Photo pop-ups pinned on unlocked countries */
 .photo-bubble-anchor {
+  /* Zero-size anchor exactly on the spot, like .city-marker */
+  position: relative;
+  width: 0;
+  height: 0;
   transition: opacity 0.25s;
 }
+/* A balloon on a string: the photo floats above its spot so the city or symbol there stays visible. */
 .photo-bubble {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  bottom: 46px;
+  translate: -50% 0;
   display: block;
   width: 58px;
   height: 58px;
   padding: 0;
-  margin-top: -42px; /* sit above the country, tail pointing down at it */
   border: var(--border);
   border-radius: 50%;
   background: white;
   box-shadow: var(--shadow);
   cursor: pointer;
   animation: float 3s ease-in-out infinite;
-  transition: width 0.15s, height 0.15s, margin 0.15s;
+  transition: width 0.15s, height 0.15s;
 }
 .photo-bubble img {
   width: 100%;
@@ -49,16 +56,16 @@
   content: '';
   position: absolute;
   left: 50%;
-  bottom: -11px;
-  transform: translateX(-50%);
-  border: 8px solid transparent;
-  border-top: 10px solid var(--ink);
-  border-bottom: 0;
+  top: 100%;
+  translate: -50% 0;
+  width: 2px;
+  height: 46px;
+  border-radius: 1px;
+  background: var(--ink);
 }
 .photo-bubble:hover {
   width: 74px;
   height: 74px;
-  margin-top: -58px;
   z-index: 2;
 }
 .photo-bubble-count {
@@ -79,7 +86,7 @@
   text-align: center;
 }
 
-/* ---------- Cities: cartoon skyscrapers standing on the city point ---------- */
+/* ---------- Cities and place symbols, standing on their point ---------- */
 .city-marker {
   /* Zero-size anchor exactly on the city; the building rises above it, the label hangs below. */
   position: relative;
@@ -88,7 +95,7 @@
   pointer-events: none;
   transition: opacity 0.25s;
 }
-.city-icon {
+.map-icon {
   position: absolute;
   bottom: 0;
   left: 50%;
@@ -97,7 +104,7 @@
   line-height: 0;
   filter: drop-shadow(1px 2px 0 rgba(43, 58, 103, 0.25));
 }
-.city-tower {
+.map-symbol {
   display: block;
 }
 /* Capital: a flag on a pole rising from the spire */
@@ -147,11 +154,13 @@
   opacity: 0;
   transition: opacity 0.3s;
 }
-.is-capital .city-label {
+.is-capital .city-label,
+.is-province-capital .city-label {
   font-weight: 700;
   font-size: 12px;
 }
 .show-capital-names .is-capital .city-label,
+.show-capital-names .is-province-capital .city-label,
 .show-city-names .city-label {
   opacity: 1;
 }
@@ -164,4 +173,9 @@
   z-index: 6;
   display: none;
   pointer-events: none;
+}
+
+/* Keep the globe's marker z-indexes (globe.gl sets large ones) inside the globe, below the page header. */
+.globe-wrapper {
+  isolation: isolate;
 }

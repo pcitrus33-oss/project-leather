@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { COUNTRIES, getCountry } from '../lib/countries';
 import { api, type Location, type UploadResult } from '../lib/api';
+import { getProvince, hasProvinces, provinceWord, provincesOf } from '../lib/provinces';
 import Flag from './Flag';
 import LocationSearch from './LocationSearch';
 import './UnlockModal.css';
@@ -10,10 +11,13 @@ interface Props {
   open: boolean;
   /** Pre-selected country (still changeable unless `fixedCountry`). */
   iso?: string;
+  /** Pre-selected province of USA/Canada/China (fixed too when `fixedCountry`). */
+  province?: string;
   fixedCountry?: boolean;
   unlockedIsos: Set<string>;
+  unlockedProvinces?: Set<string>;
   onClose: () => void;
-  onUploaded: (iso: string, result: UploadResult) => void;
+  onUploaded: (iso: string, result: UploadResult, province: string | null) => void;
 }
 
 interface Picked {
@@ -21,8 +25,18 @@ interface Picked {
   url: string;
 }
 
-export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onClose, onUploaded }: Props) {
+export default function UnlockModal({
+  open,
+  iso,
+  province,
+  fixedCountry,
+  unlockedIsos,
+  unlockedProvinces = new Set(),
+  onClose,
+  onUploaded,
+}: Props) {
   const [countryIso, setCountryIso] = useState<string | undefined>(iso);
+  const [provinceId, setProvinceId] = useState<string | undefined>(province);
   const [query, setQuery] = useState('');
   const [files, setFiles] = useState<Picked[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -41,13 +55,14 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
     if (!open) return;
     revokeAll();
     setCountryIso(iso);
+    setProvinceId(province);
     setQuery('');
     setFiles([]);
     setProgress(null);
     setError(null);
     setLocation(null);
     setSearchingPlace(false);
-  }, [open, iso]);
+  }, [open, iso, province]);
 
   useEffect(() => revokeAll, []);
 
@@ -59,10 +74,15 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
   }, [open, progress, onClose]);
 
   const country = getCountry(countryIso);
+  // USA, Canada and China take photos per state/province, so they need one picked first.
+  const needsProvince = !!country && hasProvinces(country.iso);
+  const prov = needsProvince ? getProvince(provinceId) : undefined;
+  const target = prov ?? country;
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? COUNTRIES.filter((c) => c.name.toLowerCase().includes(q)) : COUNTRIES;
-  }, [query]);
+    const list = country && needsProvince ? provincesOf(country.iso) : COUNTRIES;
+    return q ? list.filter((c) => c.name.toLowerCase().includes(q)) : list;
+  }, [query, country, needsProvince]);
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -77,7 +97,7 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
     });
 
   const upload = async () => {
-    if (!country || files.length === 0) return;
+    if (!country || files.length === 0 || (needsProvince && !prov)) return;
     setError(null);
     setProgress(0);
     try {
@@ -86,8 +106,9 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
         files.map((f) => f.file),
         setProgress,
         location,
+        prov?.id,
       );
-      onUploaded(country.iso, result);
+      onUploaded(country.iso, result, prov?.id ?? null);
       if (result.failed.length) alert(`These files couldn't be read as images:\n${result.failed.join('\n')}`);
     } catch (e) {
       setError((e as Error).message);
@@ -96,7 +117,7 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
     }
   };
 
-  const alreadyUnlocked = country && unlockedIsos.has(country.iso);
+  const alreadyUnlocked = prov ? unlockedProvinces.has(prov.id) : !!country && unlockedIsos.has(country.iso);
   const busy = progress !== null;
 
   return (
@@ -133,9 +154,15 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
                   autoFocus
                 />
                 <ul className="country-list">
-                  {matches.map((c) => (
+                  {(matches as typeof COUNTRIES).map((c) => (
                     <li key={c.iso}>
-                      <button onClick={() => setCountryIso(c.iso)}>
+                      <button
+                        onClick={() => {
+                          setCountryIso(c.iso);
+                          setProvinceId(undefined);
+                          setQuery('');
+                        }}
+                      >
                         <span className="country-flag"><Flag country={c} /></span>
                         <span>{c.name}</span>
                         {unlockedIsos.has(c.iso) && <span className="country-badge">unlocked</span>}
@@ -145,12 +172,52 @@ export default function UnlockModal({ open, iso, fixedCountry, unlockedIsos, onC
                   {matches.length === 0 && <li className="country-empty">No country called “{query}” 🤔</li>}
                 </ul>
               </>
+            ) : needsProvince && !prov ? (
+              <>
+                <h2 className="title modal-title">
+                  <Flag country={country} /> Which {provinceWord(country.iso)} in {country.name}?
+                </h2>
+                {!fixedCountry && (
+                  <button className="link-btn" onClick={() => setCountryIso(undefined)}>
+                    ← pick a different country
+                  </button>
+                )}
+                <input
+                  className="input"
+                  placeholder={`Search ${provinceWord(country.iso)}s…`}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  autoFocus
+                />
+                <ul className="country-list">
+                  {provincesOf(country.iso)
+                    .filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+                    .map((p) => (
+                      <li key={p.id}>
+                        <button
+                          onClick={() => {
+                            setProvinceId(p.id);
+                            setQuery('');
+                          }}
+                        >
+                          <span>{p.name}</span>
+                          {unlockedProvinces.has(p.id) && <span className="country-badge">unlocked</span>}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </>
             ) : (
               <>
                 <h2 className="title modal-title">
-                  <Flag country={country} /> {alreadyUnlocked ? `Add photos to ${country.name}` : `Unlock ${country.name}`}
+                  <Flag country={country} /> {alreadyUnlocked ? `Add photos to ${target!.name}` : `Unlock ${target!.name}`}
                 </h2>
-                {!fixedCountry && (
+                {prov && !(fixedCountry && province) && (
+                  <button className="link-btn" onClick={() => setProvinceId(undefined)} disabled={busy}>
+                    ← pick a different {provinceWord(country.iso)}
+                  </button>
+                )}
+                {!prov && !fixedCountry && (
                   <button className="link-btn" onClick={() => setCountryIso(undefined)} disabled={busy}>
                     ← pick a different country
                   </button>

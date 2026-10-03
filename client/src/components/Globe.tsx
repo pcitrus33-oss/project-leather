@@ -2,19 +2,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GlobeGL, { type GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
+import { PROVINCES, hasProvinces, type Province } from '../lib/provinces';
 import cities from '../data/cities.json';
 import { buildLakes, loadLakes } from '../lib/lakes';
-import { cityIconHtml } from './cityIcon';
+import { cityIconHtml, placeIconHtml, type CityRank } from './mapIcons';
 import { buildLandMesh, type LandMesh } from '../lib/landMesh';
-import type { UnlockedCountry } from '../lib/api';
+import { featureTest } from '../lib/sphere';
+import type { PlaceKind, UnlockedCountry } from '../lib/api';
 import './Globe.css';
+
+/** What the pointer is over: a country, or (zoomed in on USA/Canada/China) one of its provinces. */
+export interface GlobeTarget {
+  country: Country;
+  province: Province | null;
+}
 
 interface Props {
   unlocked: UnlockedCountry[];
-  /** A white (unlocked) country or its photo bubble was clicked; the camera has already flown there. */
-  onOpenCountry: (iso: string) => void;
-  /** A gray (locked) country was clicked at screen position x/y. */
-  onLockedClick: (country: Country, x: number, y: number) => void;
+  /** Developer "show everything": draw every country/province as unlocked, with all cities. */
+  revealAll?: boolean;
+  /** An unlocked country/province (or a photo bubble) was clicked; the camera has already flown there. */
+  onOpen: (iso: string, province: string | null) => void;
+  /** A locked country/province was clicked at screen position x/y. */
+  onLockedClick: (target: GlobeTarget, x: number, y: number) => void;
 }
 
 const COLORS = {
@@ -27,24 +37,57 @@ const COLORS = {
   hoverUnlocked: '#fff3c4',
 };
 
-// Narrow (phone) screens need the camera further out to fit the whole globe.
-type Marker =
-  | { kind: 'city'; iso: string; lat: number; lng: number; name: string; capital: boolean }
-  | { kind: 'bubble'; lat: number; lng: number; country: Country; count: number; thumbUrl: string; label: string };
-
-const CITY_MARKERS = cities.map((c): Marker & { kind: 'city' } => ({
-  kind: 'city',
-  iso: c.iso,
-  lat: c.lat,
-  lng: c.lng,
-  name: c.name,
-  capital: 'capital' in c && !!c.capital,
-}));
+/** Provinces (and their lock state) only show once zoomed in closer than this. */
+const PROVINCE_ALTITUDE = 1.6;
 // Capital names appear first; other city names only once zoomed closer, to limit overlap.
 const CAPITAL_NAMES_ALTITUDE = 1.3;
 const CITY_NAMES_ALTITUDE = 0.7;
-// City buildings stand on the country surface (caps at 0.007); photo bubbles float higher.
-const markerAltitude = (d: object) => ((d as Marker).kind === 'city' ? 0.008 : 0.05);
+const COUNTRY_ALT = 0.007;
+const PROVINCE_ALT = 0.0074;
+
+type CityMarker = {
+  kind: 'city';
+  rank: CityRank;
+  iso: string;
+  /** Province it sits in (USA/Canada/China), which must be unlocked for it to show. */
+  province: string | null;
+  lat: number;
+  lng: number;
+  name: string;
+};
+type Marker =
+  | CityMarker
+  | { kind: 'place'; place: PlaceKind; lat: number; lng: number; name: string }
+  | { kind: 'bubble'; lat: number; lng: number; target: GlobeTarget; count: number; thumbUrl: string; label: string };
+
+/** Every possible city marker: country capitals, the biggest cities, and province capitals. */
+const ALL_CITIES: CityMarker[] = (() => {
+  const provinceTests = PROVINCES.map((p) => ({ p, contains: featureTest(p.feature) }));
+  const provinceAt = (iso: string, lat: number, lng: number) =>
+    provinceTests.find((t) => t.p.iso === iso && t.contains([lng, lat]))?.p.id ?? null;
+
+  const provinceCapitals: CityMarker[] = PROVINCES.map((p) => ({
+    kind: 'city',
+    rank: 'provinceCapital',
+    iso: p.iso,
+    province: p.id,
+    ...p.capital,
+  }));
+  const near = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => Math.hypot(a.lat - b.lat, a.lng - b.lng) < 0.3;
+
+  const others: CityMarker[] = [];
+  for (const c of cities) {
+    const rank: CityRank = 'capital' in c && c.capital ? 'capital' : 'city';
+    const marker: CityMarker = { kind: 'city', rank, iso: c.iso, province: hasProvinces(c.iso) ? provinceAt(c.iso, c.lat, c.lng) : null, lat: c.lat, lng: c.lng, name: c.name };
+    const twin = provinceCapitals.findIndex((p) => p.iso === c.iso && near(p, c));
+    if (twin < 0) others.push(marker);
+    // The same city as a province capital: a national capital wins, otherwise keep the province capital.
+    else if (rank === 'capital') provinceCapitals.splice(twin, 1, { ...marker, province: provinceCapitals[twin].province });
+  }
+  return [...provinceCapitals, ...others];
+})();
+
+const markerAltitude = (d: object) => ((d as Marker).kind === 'bubble' ? 0.05 : 0.008);
 
 const DEFAULT_POV = { lat: 25, lng: 10, altitude: window.innerWidth < 600 ? 3.8 : 2.3 };
 const FLY_MS = 900;
@@ -96,23 +139,30 @@ function makeClouds(radius: number) {
   return group;
 }
 
-export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props) {
+type CountryRegion = Country & { key: string };
+type ProvinceRegion = Province & { key: string };
+
+export default function Globe({ unlocked, revealAll = false, onOpen, onLockedClick }: Props) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
-  const [hovered, setHovered] = useState<Country | null>(null);
+  /** "c:ISO" or "p:PROVINCE" under the pointer. */
+  const [hovered, setHovered] = useState<string | null>(null);
   const flyingRef = useRef(false);
   const resumeTimer = useRef<number | undefined>(undefined);
+  const zoomedInRef = useRef(false);
 
-  const unlockedSet = useMemo(() => new Set(unlocked.map((u) => u.iso)), [unlocked]);
-  const isUnlocked = useCallback((c: Country) => unlockedSet.has(c.iso), [unlockedSet]);
+  // What's really unlocked (drives clicks) and what is drawn unlocked (developer reveal shows everything).
+  const unlockedCountries = useMemo(() => new Set(unlocked.map((u) => u.iso)), [unlocked]);
+  const unlockedProvinces = useMemo(() => new Set(unlocked.flatMap((u) => u.provinces.map((p) => p.id))), [unlocked]);
+  const shownCountry = useCallback((iso: string) => revealAll || unlockedCountries.has(iso), [revealAll, unlockedCountries]);
+  const shownProvince = useCallback((id: string) => revealAll || unlockedProvinces.has(id), [revealAll, unlockedProvinces]);
 
-  // Large lakes on unlocked countries, built once per country after the lake data loads.
+  // Large lakes on (shown) unlocked countries, built once per country after the lake data loads.
   const [lakes, setLakes] = useState<{ country: Country; obj: THREE.Object3D }[]>([]);
   const lakeCache = useRef(new Map<string, THREE.Object3D>());
   useEffect(() => {
     let cancelled = false;
-    const countries = unlocked.flatMap((u) => getCountry(u.iso) ?? []);
-    for (const iso of lakeCache.current.keys()) if (!unlockedSet.has(iso)) lakeCache.current.delete(iso);
+    const countries = COUNTRIES.filter((c) => shownCountry(c.iso));
     if (countries.length === 0) return setLakes([]);
     loadLakes()
       .then((all) => {
@@ -129,34 +179,50 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     return () => {
       cancelled = true;
     };
-  }, [unlocked, unlockedSet]);
+  }, [shownCountry]);
 
   const tooltip = useCallback(
-    (c: Country) => {
-      const u = unlocked.find((x) => x.iso === c.iso);
-      const sub = u ? `${u.count} photo${u.count === 1 ? '' : 's'} · click to open` : 'locked · click to unlock';
-      return `<div class="globe-tip"><b>${flagHtml(c)} ${c.name}</b><span>${sub}</span></div>`;
+    ({ country, province }: GlobeTarget) => {
+      const u = unlocked.find((x) => x.iso === country.iso);
+      const photos = (n: number) => `${n} photo${n === 1 ? '' : 's'}`;
+      if (province) {
+        const p = u?.provinces.find((x) => x.id === province.id);
+        const sub = p ? `${photos(p.count)} · click to open` : 'locked · click to unlock';
+        return `<div class="globe-tip"><b>${flagHtml(country)} ${province.name}</b><span>${country.name} · ${sub}</span></div>`;
+      }
+      let sub = u ? `${photos(u.count)} · click to open` : 'locked · click to unlock';
+      if (u && hasProvinces(country.iso)) sub = `${photos(u.count)} in ${u.provinces.length} ${u.provinces.length === 1 ? 'place' : 'places'} · click to open`;
+      return `<div class="globe-tip"><b>${flagHtml(country)} ${country.name}</b><span>${sub}</span></div>`;
     },
     [unlocked],
   );
-
   const tooltipRef = useRef(tooltip);
   tooltipRef.current = tooltip;
 
-  // All countries as one merged mesh (see lib/landMesh.ts), built when the globe is ready.
-  const landRef = useRef<LandMesh | null>(null);
+  // Countries, and the provinces of USA/Canada/China, each as one merged mesh (see lib/landMesh.ts).
+  const landRef = useRef<{ countries: LandMesh<CountryRegion>; provinces: LandMesh<ProvinceRegion> } | null>(null);
   const [landReady, setLandReady] = useState(false);
   const tipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const land = landRef.current;
     if (!land) return;
-    for (const c of COUNTRIES) {
-      const open = unlockedSet.has(c.iso);
-      const top = c === hovered ? (open ? COLORS.hoverUnlocked : COLORS.hoverLocked) : open ? COLORS.unlocked : COLORS.locked;
-      land.setColor(c.iso, top, open ? COLORS.unlockedSide : COLORS.lockedSide);
-    }
-  }, [landReady, unlockedSet, hovered]);
+    const paint = (mesh: LandMesh<CountryRegion | ProvinceRegion>, key: string, open: boolean, hover: boolean) => {
+      const top = hover ? (open ? COLORS.hoverUnlocked : COLORS.hoverLocked) : open ? COLORS.unlocked : COLORS.locked;
+      mesh.setColor(key, top, open ? COLORS.unlockedSide : COLORS.lockedSide);
+    };
+    for (const c of COUNTRIES) paint(land.countries, c.iso, shownCountry(c.iso), hovered === `c:${c.iso}`);
+    for (const p of PROVINCES) paint(land.provinces, p.id, shownProvince(p.id), hovered === `p:${p.id}`);
+  }, [landReady, shownCountry, shownProvince, hovered]);
+
+  /** Country (and, when zoomed in on a province country, province) at a point. */
+  const targetAt = useCallback((lat: number, lng: number): GlobeTarget | null => {
+    const land = landRef.current;
+    const country = land?.countries.regionAt(lat, lng);
+    if (!land || !country) return null;
+    const province = zoomedInRef.current && hasProvinces(country.iso) ? land.provinces.regionAt(lat, lng) : null;
+    return { country, province };
+  }, []);
 
   const globeMaterial = useMemo(
     () => new THREE.MeshToonMaterial({ color: COLORS.ocean, emissive: '#3fa9e0', emissiveIntensity: 0.18 }),
@@ -170,18 +236,19 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
   }, []);
 
   // Keep the latest callbacks reachable from the hand-built bubble DOM elements.
-  const openRef = useRef(onOpenCountry);
-  openRef.current = onOpenCountry;
+  const openRef = useRef(onOpen);
+  openRef.current = onOpen;
 
-  // Flies to a spot (a photo pin, or the country's centre), then opens the country page.
-  const flyTo = useCallback((country: Country, lat = country.lat, lng = country.lng) => {
+  // Flies to a spot (a photo pin, or the country/province centre), then opens its page.
+  const flyTo = useCallback(({ country, province }: GlobeTarget, lat?: number, lng?: number) => {
     const globe = globeRef.current;
     if (!globe || flyingRef.current) return;
     flyingRef.current = true;
     savePov(globe.pointOfView());
     globe.controls().autoRotate = false;
-    globe.pointOfView({ lat, lng, altitude: 0.9 }, FLY_MS);
-    window.setTimeout(() => openRef.current(country.iso), FLY_MS);
+    const spot = province ?? country;
+    globe.pointOfView({ lat: lat ?? spot.lat, lng: lng ?? spot.lng, altitude: 0.9 }, FLY_MS);
+    window.setTimeout(() => openRef.current(country.iso, province?.id ?? null), FLY_MS);
   }, []);
   const flyRef = useRef(flyTo);
   flyRef.current = flyTo;
@@ -196,12 +263,14 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     }, AUTO_SPIN_RESUME_MS);
   }, []);
 
-  // City names fade in when zoomed close; toggled on the DOM directly to avoid re-rendering the globe.
+  // Zoom-dependent display, toggled directly (no React re-render of the globe).
   const wrapperRef = useRef<HTMLDivElement>(null);
   const handleZoom = useCallback((pov: { altitude: number }) => {
     const cl = wrapperRef.current?.classList;
     cl?.toggle('show-capital-names', pov.altitude < CAPITAL_NAMES_ALTITUDE);
     cl?.toggle('show-city-names', pov.altitude < CITY_NAMES_ALTITUDE);
+    zoomedInRef.current = pov.altitude < PROVINCE_ALTITUDE;
+    if (landRef.current) landRef.current.provinces.object.visible = zoomedInRef.current;
   }, []);
 
   const handleReady = useCallback(() => {
@@ -214,13 +283,16 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     controls.minDistance = globe.getGlobeRadius() * 1.25;
     controls.maxDistance = globe.getGlobeRadius() * 5;
     controls.addEventListener('start', pauseSpin);
+
+    const countries = buildLandMesh(COUNTRIES.map((c) => ({ ...c, key: c.iso })), COUNTRY_ALT);
+    // Province borders are drawn softer than country borders.
+    const provinces = buildLandMesh(PROVINCES.map((p) => ({ ...p, key: p.id })), PROVINCE_ALT, '#6b779c');
+    globe.scene().add(countries.object, provinces.object);
+    landRef.current = { countries, provinces };
+    setLandReady(true);
+
     globe.pointOfView(savedPov ?? DEFAULT_POV, 0);
     handleZoom(globe.pointOfView());
-
-    const land = buildLandMesh();
-    globe.scene().add(land.object);
-    landRef.current = land;
-    setLandReady(true);
 
     // The default light sits fixed over the North Pole; this "sun" follows the camera from the
     // upper left instead, so every country is lit the same way.
@@ -244,28 +316,28 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     clouds.userData.stop = () => cancelAnimationFrame(frame);
   }, [pauseSpin, handleZoom]);
 
-  // Hover: find the country under the pointer from its lat/lng (the merged mesh has no per-country objects).
+  // Hover: find what's under the pointer from its lat/lng (the merged meshes have no per-region objects).
   useEffect(() => {
     const globe = globeRef.current;
-    const land = landRef.current;
     const tip = tipRef.current;
-    if (!globe || !land || !tip) return;
+    if (!globe || !landReady || !tip) return;
     const canvas = globe.renderer().domElement;
     let frame = 0;
-    let last: Country | null = null;
+    let last: string | null = null;
     const onMove = (e: PointerEvent) => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const at = globe.toGlobeCoords(e.offsetX, e.offsetY);
-        const c = at ? land.countryAt(at.lat, at.lng) : null;
-        if (c !== last) {
-          last = c;
-          setHovered(c);
-          if (c) pauseSpin();
-          canvas.style.cursor = c ? 'pointer' : '';
-          tip.innerHTML = c ? tooltipRef.current(c) : '';
+        const t = at ? targetAt(at.lat, at.lng) : null;
+        const key = t ? (t.province ? `p:${t.province.id}` : `c:${t.country.iso}`) : null;
+        if (key !== last) {
+          last = key;
+          setHovered(key);
+          if (t) pauseSpin();
+          canvas.style.cursor = t ? 'pointer' : '';
+          tip.innerHTML = t ? tooltipRef.current(t) : '';
         }
-        tip.style.display = c ? 'block' : 'none';
+        tip.style.display = t ? 'block' : 'none';
         tip.style.transform = `translate(${e.clientX + 16}px, ${e.clientY + 16}px)`;
       });
     };
@@ -282,7 +354,7 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerleave', onLeave);
     };
-  }, [landReady, pauseSpin]);
+  }, [landReady, pauseSpin, targetAt]);
 
   useEffect(
     () => () => {
@@ -295,42 +367,55 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     [],
   );
 
-  // Cities and photo bubbles share globe.gl's single HTML-element layer.
-  const markers = useMemo<Marker[]>(
-    () => [
-      // Cities only appear once their country is unlocked.
-      ...CITY_MARKERS.filter((m) => unlockedSet.has(m.iso)),
-      // One bubble per tagged place, plus one at the centre for photos without a place yet.
-      ...unlocked.flatMap((u): Marker[] => {
-        const c = getCountry(u.iso);
-        if (!c) return [];
-        const pins: Marker[] = u.pins.map((p) => ({
+  // Cities, place symbols and photo bubbles share globe.gl's single HTML-element layer.
+  const markers = useMemo<Marker[]>(() => {
+    // Cities appear once their country (or, for USA/Canada/China, their province) is unlocked.
+    const visibleCities = ALL_CITIES.filter((m) => (m.province ? shownProvince(m.province) : shownCountry(m.iso)));
+    const out: Marker[] = [...visibleCities];
+
+    for (const u of unlocked) {
+      const country = getCountry(u.iso);
+      if (!country) continue;
+      for (const p of u.pins) {
+        const province = PROVINCES.find((x) => x.id === p.province) ?? null;
+        // A tagged place the globe doesn't show yet gets its own symbol.
+        if (!visibleCities.some((c) => Math.hypot(c.lat - p.lat, c.lng - p.lng) < 0.25)) {
+          out.push({ kind: 'place', place: p.kind, lat: p.lat, lng: p.lng, name: p.name });
+        }
+        out.push({
           kind: 'bubble',
           lat: p.lat,
           lng: p.lng,
-          country: c,
+          target: { country, province },
           count: p.count,
           thumbUrl: p.thumbUrl,
-          label: `${p.name || c.name}, ${c.name}`,
-        }));
-        if (u.unplacedCount > 0) {
-          pins.push({ kind: 'bubble', lat: c.lat, lng: c.lng, country: c, count: u.unplacedCount, thumbUrl: u.coverUrl, label: c.name });
+          label: `${p.name || (province ?? country).name}, ${(province ?? country).name}`,
+        });
+      }
+      // Photos without a place: one bubble at the centre of their province, or of the country.
+      for (const p of u.provinces) {
+        const province = PROVINCES.find((x) => x.id === p.id);
+        if (province && p.unplacedCount > 0) {
+          out.push({ kind: 'bubble', lat: province.lat, lng: province.lng, target: { country, province }, count: p.unplacedCount, thumbUrl: p.coverUrl, label: `${province.name}, ${country.name}` });
         }
-        return pins;
-      }),
-    ],
-    [unlocked, unlockedSet],
-  );
+      }
+      if (u.unplacedCount > 0) {
+        out.push({ kind: 'bubble', lat: country.lat, lng: country.lng, target: { country, province: null }, count: u.unplacedCount, thumbUrl: u.coverUrl, label: country.name });
+      }
+    }
+    return out;
+  }, [unlocked, shownCountry, shownProvince]);
 
-  // Stable so globe.gl doesn't rebuild ~450 elements on every hover re-render.
+  // Stable so globe.gl doesn't rebuild every marker on each hover re-render.
   const buildMarker = useCallback(
     (d: object) => {
       const m = d as Marker;
       // The globe positions `el` with its own CSS transform, so animations live on inner elements.
       const el = document.createElement('div');
-      if (m.kind === 'city') {
-        el.className = `city-marker ${m.capital ? 'is-capital' : ''}`;
-        el.innerHTML = cityIconHtml(m.name, m.capital, getCountry(m.iso)?.alpha2);
+      if (m.kind === 'city' || m.kind === 'place') {
+        const rankClass = m.kind === 'city' && m.rank !== 'city' ? (m.rank === 'capital' ? 'is-capital' : 'is-province-capital') : '';
+        el.className = `city-marker ${rankClass}`;
+        el.innerHTML = m.kind === 'city' ? cityIconHtml(m.name, m.rank, getCountry(m.iso)?.alpha2) : placeIconHtml(m.name, m.place);
         const label = document.createElement('span');
         label.className = 'city-label';
         label.textContent = m.name;
@@ -345,7 +430,7 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
       btn.style.animationDelay = `${Math.random() * -3}s`;
       btn.onclick = (e) => {
         e.stopPropagation();
-        flyRef.current(m.country, m.lat, m.lng);
+        flyRef.current(m.target, m.lat, m.lng);
       };
       btn.onpointerenter = pauseSpin;
       el.appendChild(btn);
@@ -368,14 +453,18 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
         onGlobeReady={handleReady}
         showPointerCursor={false}
         onGlobeClick={({ lat, lng }, event) => {
-          const c = landRef.current?.countryAt(lat, lng);
-          if (!c) return;
-          if (isUnlocked(c)) flyTo(c);
-          else onLockedClick(c, event.clientX, event.clientY);
+          const t = targetAt(lat, lng);
+          if (!t) return;
+          const open = t.province ? unlockedProvinces.has(t.province.id) : unlockedCountries.has(t.country.iso);
+          if (open) flyTo(t);
+          else onLockedClick(t, event.clientX, event.clientY);
         }}
         customLayerData={lakes}
         customThreeObject={(d) => (d as (typeof lakes)[number]).obj}
-        onCustomLayerClick={(d) => flyTo((d as (typeof lakes)[number]).country)}
+        onCustomLayerClick={(d) => {
+          const country = (d as (typeof lakes)[number]).country;
+          if (unlockedCountries.has(country.iso)) flyTo({ country, province: null });
+        }}
         onZoom={handleZoom}
         htmlElementsData={markers}
         htmlLat="lat"
@@ -384,7 +473,7 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
         htmlElement={buildMarker}
         htmlElementVisibilityModifier={(el, visible) => {
           el.style.opacity = visible ? '1' : '0';
-          // Cities are decoration: clicks pass through them to the country underneath.
+          // Cities and symbols are decoration: clicks pass through them to the land underneath.
           if (el.classList.contains('photo-bubble-anchor')) el.style.pointerEvents = visible ? 'auto' : 'none';
         }}
       />

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import Globe from '../components/Globe';
+import Globe, { type GlobeTarget } from '../components/Globe';
 import UnlockModal from '../components/UnlockModal';
 import { api, type UnlockedCountry, type UploadResult } from '../lib/api';
-import type { Country } from '../lib/countries';
 import { celebrate } from '../lib/celebrate';
 import Flag from '../components/Flag';
 import PlaneIcon from '../components/PlaneIcon';
+import { DEV, useRevealAll } from '../lib/devMode';
 import './GlobePage.css';
 
 export default function GlobePage() {
@@ -15,8 +15,9 @@ export default function GlobePage() {
   const [unlocked, setUnlocked] = useState<UnlockedCountry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ open: boolean; iso?: string }>({ open: false });
-  const [lockedPopup, setLockedPopup] = useState<{ country: Country; x: number; y: number } | null>(null);
+  const [modal, setModal] = useState<{ open: boolean; iso?: string; province?: string }>({ open: false });
+  const [lockedPopup, setLockedPopup] = useState<{ target: GlobeTarget; x: number; y: number } | null>(null);
+  const revealAll = useRevealAll();
 
   const refresh = useCallback(
     () =>
@@ -36,6 +37,7 @@ export default function GlobePage() {
   }, [refresh]);
 
   const unlockedIsos = useMemo(() => new Set(unlocked.map((u) => u.iso)), [unlocked]);
+  const unlockedProvinces = useMemo(() => new Set(unlocked.flatMap((u) => u.provinces.map((p) => p.id))), [unlocked]);
   const photoTotal = unlocked.reduce((n, u) => n + u.count, 0);
 
   const handleUploaded = (_iso: string, result: UploadResult) => {
@@ -49,8 +51,9 @@ export default function GlobePage() {
     <div className="globe-page" onPointerDown={() => setLockedPopup(null)}>
       <Globe
         unlocked={unlocked}
-        onOpenCountry={(iso) => navigate(`/country/${iso}`)}
-        onLockedClick={(country, x, y) => setLockedPopup({ country, x, y })}
+        revealAll={revealAll}
+        onOpen={(iso, province) => navigate(province ? `/country/${iso}/${province}` : `/country/${iso}`)}
+        onLockedClick={(target, x, y) => setLockedPopup({ target, x, y })}
       />
 
       <header className="globe-header">
@@ -73,6 +76,11 @@ export default function GlobePage() {
         >
           <span className="chip">🗺️ {unlocked.length} {unlocked.length === 1 ? 'country' : 'countries'}</span>
           <span className="chip">📸 {photoTotal} photos</span>
+          {DEV && (
+            <Link to="/settings" className="chip dev-chip" title="Developer site: sandbox data, see Settings for tools">
+              🛠️ Developer{revealAll ? ' · showing everything' : ''}
+            </Link>
+          )}
           <Link to="/settings" className="btn btn-icon" title="Settings" aria-label="Settings">
             ⚙️
           </Link>
@@ -120,13 +128,15 @@ export default function GlobePage() {
             onPointerDown={(e) => e.stopPropagation()}
           >
             <b>
-              <Flag country={lockedPopup.country} /> {lockedPopup.country.name}
+              <Flag country={lockedPopup.target.country} /> {(lockedPopup.target.province ?? lockedPopup.target.country).name}
             </b>
-            <span>Not unlocked yet!</span>
+            <span>
+              {lockedPopup.target.province ? `${lockedPopup.target.country.name} · ` : ''}Not unlocked yet!
+            </span>
             <button
               className="btn btn-yellow"
               onClick={() => {
-                setModal({ open: true, iso: lockedPopup.country.iso });
+                setModal({ open: true, iso: lockedPopup.target.country.iso, province: lockedPopup.target.province?.id });
                 setLockedPopup(null);
               }}
             >
@@ -139,7 +149,9 @@ export default function GlobePage() {
       <UnlockModal
         open={modal.open}
         iso={modal.iso}
+        province={modal.province}
         unlockedIsos={unlockedIsos}
+        unlockedProvinces={unlockedProvinces}
         onClose={() => setModal({ open: false })}
         onUploaded={handleUploaded}
       />
