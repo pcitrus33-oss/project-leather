@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import multer from 'multer';
-import { db, transaction, defaultTheme, isThemeId, setSetting, THEME_IDS, type PhotoRow } from './db.js';
+import { db, transaction, defaultTheme, globeView, isGlobeView, isThemeId, setSetting, GLOBE_VIEWS, THEME_IDS, type PhotoRow } from './db.js';
 import { processUpload, deleteImageFiles } from './images.js';
 import { PROVINCE_COUNTRIES, provinceBelongsTo } from './provinces.js';
 import { isPlaceKind, placeKind, type PlaceKind } from './places.js';
@@ -350,18 +350,20 @@ api.put('/countries/:iso/theme', validIso, (req, res) => {
   res.json({ theme });
 });
 
+const settings = () => ({ defaultTheme: defaultTheme(), globeView: globeView() });
+
 api.get('/settings', (_req, res) => {
-  res.json({ defaultTheme: defaultTheme() });
+  res.json(settings());
 });
 
+/** Updates any of the settings sent; the rest stay as they are. */
 api.put('/settings', (req, res) => {
-  const theme = req.body?.defaultTheme;
-  if (!isThemeId(theme)) {
-    res.status(400).json({ error: `defaultTheme must be one of: ${THEME_IDS.join(', ')}` });
-    return;
-  }
-  setSetting('default_theme', theme);
-  res.json({ defaultTheme: theme });
+  const { defaultTheme: theme, globeView: view } = req.body ?? {};
+  if (theme !== undefined && !isThemeId(theme)) throw new BadRequest(`defaultTheme must be one of: ${THEME_IDS.join(', ')}`);
+  if (view !== undefined && !isGlobeView(view)) throw new BadRequest(`globeView must be one of: ${GLOBE_VIEWS.join(', ')}`);
+  if (theme !== undefined) setSetting('default_theme', theme);
+  if (view !== undefined) setSetting('globe_view', view);
+  res.json(settings());
 });
 
 /** Update a photo's caption, location (null removes it) and/or province (moves it). */

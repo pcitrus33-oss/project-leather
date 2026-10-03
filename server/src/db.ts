@@ -81,6 +81,16 @@ export function setSetting(key: string, value: string) {
   );
 }
 
+/** How the globe is drawn; keep in sync with GlobeView in client/src/lib/api.ts. */
+export const GLOBE_VIEWS = ['day', 'daynight'] as const;
+export type GlobeView = (typeof GLOBE_VIEWS)[number];
+export const isGlobeView = (v: unknown): v is GlobeView => GLOBE_VIEWS.includes(v as GlobeView);
+
+export function globeView(): GlobeView {
+  const v = getSetting('globe_view');
+  return isGlobeView(v) ? v : 'day';
+}
+
 /** Theme newly unlocked countries start with. */
 export function defaultTheme(): ThemeId {
   const v = getSetting('default_theme');
