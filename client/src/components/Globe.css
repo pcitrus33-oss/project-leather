@@ -79,36 +79,63 @@
   text-align: center;
 }
 
-/* ---------- Cities ---------- */
+/* ---------- Cities: cartoon skyscrapers standing on the city point ---------- */
 .city-marker {
+  /* Zero-size anchor exactly on the city; the building rises above it, the label hangs below. */
   position: relative;
+  width: 0;
+  height: 0;
   pointer-events: none;
   transition: opacity 0.25s;
 }
-.city-dot {
+.city-icon {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  translate: -50% 0;
   display: block;
-  width: 7px;
-  height: 7px;
-  border: 1.5px solid var(--ink);
-  border-radius: 50%;
-  background: var(--yellow);
+  line-height: 0;
+  filter: drop-shadow(1px 2px 0 rgba(43, 58, 103, 0.25));
 }
-.city-marker.is-capital .city-dot {
-  width: auto;
-  height: auto;
-  border: none;
-  background: none;
-  color: var(--pink);
-  font-size: 15px;
-  line-height: 1;
-  -webkit-text-stroke: 1.2px var(--ink);
-  paint-order: stroke fill;
+.city-tower {
+  display: block;
+}
+/* Capital: a flag on a pole rising from the spire */
+.city-flag {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 2px);
+  width: 2px;
+  height: 18px;
+  background: var(--ink);
+  border-radius: 1px;
+}
+.city-flag-cloth {
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 15px;
+  height: 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  background-size: cover;
+  transform-origin: left center;
+  animation: flag-wave 2.4s ease-in-out infinite;
+}
+@keyframes flag-wave {
+  0%,
+  100% {
+    transform: skewY(0deg) scaleX(1);
+  }
+  50% {
+    transform: skewY(-6deg) scaleX(0.9);
+  }
 }
 .city-label {
   position: absolute;
   left: 50%;
-  top: 100%;
-  translate: -50% 2px;
+  top: 0;
+  translate: -50% 3px;
   padding: 0 6px;
   border-radius: 999px;
   background: rgba(255, 250, 243, 0.85);

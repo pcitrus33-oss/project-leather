@@ -3,7 +3,8 @@ import GlobeGL, { type GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
 import cities from '../data/cities.json';
-import { buildTerrain, loadTerrainData, SHADOWS_ENABLED } from '../lib/terrain';
+import { buildLakes, loadLakes } from '../lib/lakes';
+import { cityIconHtml } from './cityIcon';
 import { buildLandMesh, type LandMesh } from '../lib/landMesh';
 import type { UnlockedCountry } from '../lib/api';
 import './Globe.css';
@@ -20,9 +21,8 @@ const COLORS = {
   ocean: '#8fd7f7',
   locked: '#c8ced8',
   lockedSide: '#a3abba',
-  // Unlocked countries are covered by terrain; their flat cap matches its lowland colour.
-  unlocked: '#a6e3a1',
-  unlockedSide: '#7cc47a',
+  unlocked: '#ffffff',
+  unlockedSide: '#e3e8f2',
   hoverLocked: '#ffc2dd',
   hoverUnlocked: '#fff3c4',
 };
@@ -43,8 +43,8 @@ const CITY_MARKERS = cities.map((c): Marker & { kind: 'city' } => ({
 // Capital names appear first; other city names only once zoomed closer, to limit overlap.
 const CAPITAL_NAMES_ALTITUDE = 1.3;
 const CITY_NAMES_ALTITUDE = 0.7;
-// Cities sit just above raised (unlocked) countries; bubbles float higher.
-const markerAltitude = (d: object) => ((d as Marker).kind === 'city' ? 0.025 : 0.05);
+// City buildings stand on the country surface (caps at 0.007); photo bubbles float higher.
+const markerAltitude = (d: object) => ((d as Marker).kind === 'city' ? 0.008 : 0.05);
 
 const DEFAULT_POV = { lat: 25, lng: 10, altitude: window.innerWidth < 600 ? 3.8 : 2.3 };
 const FLY_MS = 900;
@@ -106,21 +106,21 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
   const unlockedSet = useMemo(() => new Set(unlocked.map((u) => u.iso)), [unlocked]);
   const isUnlocked = useCallback((c: Country) => unlockedSet.has(c.iso), [unlockedSet]);
 
-  // Relief models for unlocked countries, built once per country after the elevation map loads.
-  const [terrain, setTerrain] = useState<{ country: Country; obj: THREE.Object3D }[]>([]);
-  const terrainCache = useRef(new Map<string, THREE.Object3D>());
+  // Large lakes on unlocked countries, built once per country after the lake data loads.
+  const [lakes, setLakes] = useState<{ country: Country; obj: THREE.Object3D }[]>([]);
+  const lakeCache = useRef(new Map<string, THREE.Object3D>());
   useEffect(() => {
     let cancelled = false;
     const countries = unlocked.flatMap((u) => getCountry(u.iso) ?? []);
-    for (const iso of terrainCache.current.keys()) if (!unlockedSet.has(iso)) terrainCache.current.delete(iso);
-    if (countries.length === 0) return setTerrain([]);
-    loadTerrainData()
-      .then((terrainData) => {
+    for (const iso of lakeCache.current.keys()) if (!unlockedSet.has(iso)) lakeCache.current.delete(iso);
+    if (countries.length === 0) return setLakes([]);
+    loadLakes()
+      .then((all) => {
         if (cancelled) return;
-        setTerrain(
+        setLakes(
           countries.map((country) => {
-            let obj = terrainCache.current.get(country.iso);
-            if (!obj) terrainCache.current.set(country.iso, (obj = buildTerrain(country, terrainData)));
+            let obj = lakeCache.current.get(country.iso);
+            if (!obj) lakeCache.current.set(country.iso, (obj = buildLakes(country, all)));
             return { country, obj };
           }),
         );
@@ -223,17 +223,8 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
     setLandReady(true);
 
     // The default light sits fixed over the North Pole; this "sun" follows the camera from the
-    // upper left instead, so every country is lit the same way and mountains cast shadows.
+    // upper left instead, so every country is lit the same way.
     const sun = new THREE.DirectionalLight(0xffffff, 0.6 * Math.PI);
-    if (SHADOWS_ENABLED) {
-      globe.renderer().shadowMap.enabled = true;
-      globe.renderer().shadowMap.type = THREE.PCFSoftShadowMap;
-      sun.castShadow = true;
-      sun.shadow.mapSize.set(2048, 2048);
-      Object.assign(sun.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 700 });
-      sun.shadow.bias = -0.0005;
-      sun.shadow.normalBias = 0.02;
-    }
     globe.lights([new THREE.AmbientLight(0xcccccc, Math.PI), sun]);
     globe.scene().add(sun.target);
     const camera = globe.camera();
@@ -339,13 +330,11 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
       const el = document.createElement('div');
       if (m.kind === 'city') {
         el.className = `city-marker ${m.capital ? 'is-capital' : ''}`;
-        const dot = document.createElement('span');
-        dot.className = 'city-dot';
-        dot.textContent = m.capital ? '★' : '';
+        el.innerHTML = cityIconHtml(m.name, m.capital, getCountry(m.iso)?.alpha2);
         const label = document.createElement('span');
         label.className = 'city-label';
         label.textContent = m.name;
-        el.append(dot, label);
+        el.append(label);
         return el;
       }
       el.className = 'photo-bubble-anchor';
@@ -384,9 +373,9 @@ export default function Globe({ unlocked, onOpenCountry, onLockedClick }: Props)
           if (isUnlocked(c)) flyTo(c);
           else onLockedClick(c, event.clientX, event.clientY);
         }}
-        customLayerData={terrain}
-        customThreeObject={(d) => (d as (typeof terrain)[number]).obj}
-        onCustomLayerClick={(d) => flyTo((d as (typeof terrain)[number]).country)}
+        customLayerData={lakes}
+        customThreeObject={(d) => (d as (typeof lakes)[number]).obj}
+        onCustomLayerClick={(d) => flyTo((d as (typeof lakes)[number]).country)}
         onZoom={handleZoom}
         htmlElementsData={markers}
         htmlLat="lat"
