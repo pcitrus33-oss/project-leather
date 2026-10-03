@@ -88,16 +88,25 @@ function provincesOf(iso: string) {
     .prepare(
       `SELECT v.id, v.cover_photo_id, v.unlocked_at, COUNT(p.id) AS count,
               SUM(p.lat IS NULL) AS unplaced,
+              MAX(CASE WHEN p.lat IS NULL THEN p.created_at END) AS unplaced_at,
               (SELECT id FROM photos f WHERE f.province = v.id ORDER BY sort_order, created_at LIMIT 1) AS first_id
        FROM provinces v JOIN photos p ON p.province = v.id
        WHERE v.iso = ?
        GROUP BY v.id
        ORDER BY v.unlocked_at`,
     )
-    .all(iso) as { id: string; cover_photo_id: string | null; unlocked_at: string; count: number; unplaced: number; first_id: string }[];
+    .all(iso) as { id: string; cover_photo_id: string | null; unlocked_at: string; count: number; unplaced: number; unplaced_at: string | null; first_id: string }[];
   return rows.map((r) => {
     const coverId = r.cover_photo_id ?? r.first_id;
-    return { id: r.id, count: r.count, unplacedCount: r.unplaced, unlockedAt: r.unlocked_at, coverUrl: `/uploads/thumb/${coverId}.jpg` };
+    return {
+      id: r.id,
+      count: r.count,
+      unplacedCount: r.unplaced,
+      /** Newest upload among the unplaced photos (for choosing which globe bubbles to show). */
+      unplacedLatestAt: r.unplaced_at,
+      unlockedAt: r.unlocked_at,
+      coverUrl: `/uploads/thumb/${coverId}.jpg`,
+    };
   });
 }
 
@@ -177,23 +186,54 @@ api.get('/countries', (_req, res) => {
     .prepare(
       `SELECT c.iso, c.cover_photo_id, c.unlocked_at, COUNT(p.id) AS count,
               SUM(p.lat IS NULL AND p.province IS NULL) AS unplaced,
+              MAX(CASE WHEN p.lat IS NULL AND p.province IS NULL THEN p.created_at END) AS unplaced_at,
               (SELECT id FROM photos f WHERE f.iso = c.iso ORDER BY sort_order, created_at LIMIT 1) AS first_id
        FROM countries c JOIN photos p ON p.iso = c.iso
        GROUP BY c.iso
        ORDER BY c.unlocked_at`,
     )
-    .all() as unknown as { iso: string; cover_photo_id: string | null; unlocked_at: string; count: number; unplaced: number; first_id: string }[];
+    .all() as unknown as {
+    iso: string;
+    cover_photo_id: string | null;
+    unlocked_at: string;
+    count: number;
+    unplaced: number;
+    unplaced_at: string | null;
+    first_id: string;
+  }[];
 
   const placed = db
-    .prepare('SELECT id, iso, province, lat, lng, place, place_kind FROM photos WHERE lat IS NOT NULL ORDER BY sort_order, created_at')
-    .all() as { id: string; iso: string; province: string | null; lat: number; lng: number; place: string | null; place_kind: string | null }[];
+    .prepare('SELECT id, iso, province, lat, lng, place, place_kind, created_at FROM photos WHERE lat IS NOT NULL ORDER BY sort_order, created_at')
+    .all() as {
+    id: string;
+    iso: string;
+    province: string | null;
+    lat: number;
+    lng: number;
+    place: string | null;
+    place_kind: string | null;
+    created_at: string;
+  }[];
   // Photos tagged with the same search result share one pin.
-  type Pin = { iso: string; province: string | null; lat: number; lng: number; name: string; kind: string; count: number; thumbUrl: string };
+  type Pin = {
+    iso: string;
+    province: string | null;
+    lat: number;
+    lng: number;
+    name: string;
+    kind: string;
+    count: number;
+    thumbUrl: string;
+    latestAt: string;
+  };
   const pins = new Map<string, Pin>();
   for (const p of placed) {
     const key = `${p.iso}|${p.lat.toFixed(3)}|${p.lng.toFixed(3)}`;
     const pin = pins.get(key);
-    if (pin) pin.count++;
+    if (pin) {
+      pin.count++;
+      if (p.created_at > pin.latestAt) pin.latestAt = p.created_at;
+    }
     else
       pins.set(key, {
         iso: p.iso,
@@ -203,6 +243,7 @@ api.get('/countries', (_req, res) => {
         name: p.place ?? '',
         kind: p.place_kind ?? 'pin',
         count: 1,
+        latestAt: p.created_at,
         thumbUrl: `/uploads/thumb/${p.id}.jpg`,
       });
   }
@@ -218,6 +259,7 @@ api.get('/countries', (_req, res) => {
         coverId,
         coverUrl: `/uploads/thumb/${coverId}.jpg`,
         unplacedCount: r.unplaced,
+        unplacedLatestAt: r.unplaced_at,
         pins: pinList.filter((p) => p.iso === r.iso).map(({ iso: _iso, ...pin }) => pin),
         provinces: PROVINCE_COUNTRIES.has(r.iso) ? provincesOf(r.iso) : [],
       };
