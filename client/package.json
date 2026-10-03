@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -p . && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:sandbox": "vite --mode developer"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

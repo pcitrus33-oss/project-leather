@@ -7,7 +7,7 @@
     "server"
   ],
   "scripts": {
-    "dev": "concurrently -k -n server,client -c magenta,cyan \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev": "concurrently -k -n api,site,dev-api,dev-site -c magenta,cyan,yellow,green \"npm run dev -w server\" \"npm run dev -w client\" \"npm run dev:sandbox -w server\" \"npm run dev:sandbox -w client\"",
     "build": "npm run build -w client",
     "start": "npm run start -w server"
   },
