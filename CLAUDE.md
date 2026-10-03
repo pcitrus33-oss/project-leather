@@ -55,7 +55,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
 - `components/Globe.tsx` wraps `react-globe.gl` (three.js). Non-obvious points:
   - **Countries are NOT a globe.gl polygon layer.** `lib/landMesh.ts` merges all 1,616 country pieces into one mesh plus one `LineSegments` of borders, added via `globe.scene()`. As separate polygons it was ~4,800 draw calls and ~10 fps on the user's Intel Iris Xe; merged it's ~70–90 fps.
     - **Hover:** a `pointermove` listener on the canvas, using `globe.toGlobeCoords` then `land.countryAt`. The tooltip is our own `.globe-tip-floating` div.
-    - **Clicks:** `onGlobeClick` → `countryAt`, plus `onCustomLayerClick` for clicks on terrain.
+    - **Clicks:** `onGlobeClick` → `countryAt`, plus `onCustomLayerClick` for clicks on lakes.
     - **Colours:** `setColor` repaints a country's vertex range.
     - **Picking:** globe.gl only raycasts its own layers, so the merged mesh doesn't block picking.
   - **`lib/sphere.ts`** holds the shared geometry helpers. Use them instead of three-conic-polygon-geometry and d3 `geoContains`, both measured as far too slow here:
@@ -67,13 +67,14 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - **Clicking a country:** clicking an unlocked country or a bubble flies the camera there (`FLY_MS`), then navigates.
   - **Remembered view:** the camera position is kept in a module variable plus `sessionStorage` (`savePov`), so returning to `/` restores the same view.
   - **Clouds:** a plain three.js group added via `globe.scene()`.
-  - **Terrain:** unlocked countries get a painted cartoon landscape (`lib/terrain.ts`), rendered as globe.gl's custom layer.
-    - **Land:** flat land with noise-painted green "fields".
-    - **Water:** lakes, and rivers as ribbons with darker edges, both from `src/data/water.json` (Natural Earth 1:50m, via `scripts/build-water.mjs`, loaded lazily).
-    - **Mountains:** instanced low-poly cones with ink outlines (an inverted hull) and boulders, placed on a jittered grid wherever `elevation.png` exceeds `MOUNTAIN_MIN`. Snow above `SNOW_MIN`.
-    - **Style the user asked for:** fully painted, gray rocky mountain sides, no height-based colour ramp, cartoon not realistic.
+  - **Unlocked countries are white**, with only their **large lakes** drawn on top (`lib/lakes.ts`, a globe.gl custom layer, so clicking a lake opens the country).
+    - **Lake data:** `src/data/lakes.json` comes from `scripts/build-lakes.mjs`: Natural Earth 1:50m lakes of at least `MIN_KM2` (3,000 km²), plus any names in `ALWAYS_KEEP`. The user will name small but important lakes (e.g. the Dead Sea) to add there.
+    - **History:** v1.2 tried NASA-elevation relief, then painted terrain (fields, rivers, mountains, shadows). The user rejected both, so don't bring that back unless asked.
     - **Lighting:** a "sun" directional light follows the camera from the upper left. The default globe.gl light was fixed over the North Pole.
-    - **Shadows:** cast by mountains (`SHADOWS_ENABLED`). Measured cost was negligible (~2%).
+  - **City markers** are drawn cartoon skyscrapers (`components/cityIcon.ts`, SVG strings).
+    - Each city gets one of three tower shapes and a pastel colour, chosen from its name.
+    - Capitals get a bigger spired tower with a waving `flag-icons` flag on a pole.
+    - `.city-marker` is a zero-size anchor, so the building's base sits exactly on the city.
   - **Cities and bubbles** (cities only for unlocked countries; bubbles one per place pin plus one centre bubble for unplaced photos) share globe.gl's single HTML-element layer (`markers`, a `kind` union). `buildMarker` must stay a stable `useCallback`; otherwise every hover re-render rebuilds ~450 DOM elements.
   - **City names by zoom:** `handleZoom` toggles `show-capital-names` / `show-city-names` classes on the wrapper div directly, with no React state, so the globe doesn't re-render.
   - **City data:** `src/data/cities.json` is generated. Edit `scripts/build-cities.mjs` (size thresholds, `CAPITAL_OVERRIDE`, `MIN_GAP_KM`) and rerun `node scripts/build-cities.mjs` from the repo root rather than hand-editing the JSON.
