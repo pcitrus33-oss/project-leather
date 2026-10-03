@@ -6,10 +6,11 @@ import { PROVINCES, getProvince, hasProvinces, type Province } from '../lib/prov
 import cities from '../data/cities.json';
 import { buildAllLakes, loadLakes } from '../lib/lakes';
 import { installCameraTilt } from '../lib/cameraTilt';
+import { buildNightShade, isNightAt, sunDirection } from '../lib/dayNight';
 import { cityIconHtml, placeIconHtml, type CityRank } from './mapIcons';
 import { buildLandMesh, type LandMesh } from '../lib/landMesh';
 import { featureTest, R, toVector } from '../lib/sphere';
-import type { PlaceKind, UnlockedCountry } from '../lib/api';
+import type { GlobeView, PlaceKind, UnlockedCountry } from '../lib/api';
 import './Globe.css';
 
 /** What the pointer is over: a country, or (zoomed in on USA/Canada/China) one of its provinces. */
@@ -22,6 +23,8 @@ interface Props {
   unlocked: UnlockedCountry[];
   /** Developer "show everything": draw every country/province as unlocked, with all cities. */
   revealAll?: boolean;
+  /** "day" (always lit) or "daynight" (real-time night side, with glowing markers at night). */
+  view?: GlobeView;
   /** An unlocked country/province (or a photo bubble) was clicked; the camera has already flown there. */
   onOpen: (iso: string, province: string | null) => void;
   /** A locked country/province was clicked at screen position x/y. */
@@ -167,13 +170,21 @@ function makeClouds() {
     cloud.lookAt(0, 0, 0);
     group.add(cloud);
   }
-  return group;
+  return { group, material };
+}
+
+/** Clouds float at 17% of the radius: fade them out as the camera comes down to their height. */
+function cloudOpacity(altitude: number) {
+  return 0.92 * THREE.MathUtils.smoothstep(altitude, 0.6, 1.2);
 }
 
 type CountryRegion = Country & { key: string };
 type ProvinceRegion = Province & { key: string };
 
-export default function Globe({ unlocked, revealAll = false, onOpen, onLockedClick }: Props) {
+/** How often the day/night line moves to the current time. */
+const SUN_UPDATE_MS = 60_000;
+
+export default function Globe({ unlocked, revealAll = false, view = 'day', onOpen, onLockedClick }: Props) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   /** "c:ISO" or "p:PROVINCE" under the pointer. */
@@ -184,6 +195,16 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
   const currentPov = () => tiltRef.current?.untiltedPov() ?? globeRef.current!.pointOfView();
   const resumeTimer = useRef<number | undefined>(undefined);
   const zoomedInRef = useRef(false);
+  const nightRef = useRef<ReturnType<typeof buildNightShade> | null>(null);
+  const cloudsRef = useRef<ReturnType<typeof makeClouds> | null>(null);
+  const sunRef = useRef(sunDirection());
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  /** Markers in the night (day/night view only) glow; refreshed as the sun moves. */
+  const markNight = useCallback((el: HTMLElement) => {
+    const night = viewRef.current === 'daynight' && isNightAt(Number(el.dataset.lat), Number(el.dataset.lng), sunRef.current);
+    el.classList.toggle('is-night', night);
+  }, []);
 
   // What's really unlocked (drives clicks) and what is drawn unlocked (developer reveal shows everything).
   const unlockedCountries = useMemo(() => new Set(unlocked.map((u) => u.iso)), [unlocked]);
@@ -281,6 +302,12 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     cl?.toggle('show-city-names', pov.altitude < CITY_NAMES_ALTITUDE);
     zoomedInRef.current = pov.altitude < PROVINCE_ALTITUDE;
     if (landRef.current) landRef.current.provinces.object.visible = zoomedInRef.current;
+    nightRef.current?.setZoom(pov.altitude);
+    const clouds = cloudsRef.current;
+    if (clouds) {
+      clouds.material.opacity = cloudOpacity(pov.altitude);
+      clouds.group.visible = clouds.material.opacity > 0.01;
+    }
   }, []);
 
   const handleReady = useCallback(() => {
@@ -299,6 +326,10 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     const provinces = buildLandMesh(PROVINCES.map((p) => ({ ...p, key: p.id })), PROVINCE_ALT, '#6b779c');
     globe.scene().add(countries.object, provinces.object);
     landRef.current = { countries, provinces };
+    const night = buildNightShade();
+    night.mesh.visible = viewRef.current === 'daynight';
+    globe.scene().add(night.mesh);
+    nightRef.current = night;
     setLandReady(true);
 
     globe.pointOfView(savedPov ?? DEFAULT_POV, 0);
@@ -318,9 +349,11 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     const camera = globe.camera();
     const sunOffset = new THREE.Vector3();
 
-    const clouds = makeClouds();
+    const { group: clouds, material: cloudMaterial } = makeClouds();
     clouds.name = 'clouds';
     globe.scene().add(clouds);
+    cloudsRef.current = { group: clouds, material: cloudMaterial };
+    handleZoom(currentPov()); // apply the zoom-dependent cloud fade straight away
     let frame = 0;
     const drift = () => {
       clouds.rotation.y += 0.0006;
@@ -331,6 +364,19 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
     drift();
     clouds.userData.stop = () => cancelAnimationFrame(frame);
   }, [pauseSpin, handleZoom]);
+
+  useEffect(() => {
+    if (nightRef.current) nightRef.current.mesh.visible = view === 'daynight';
+    const refresh = () => {
+      sunRef.current = sunDirection();
+      nightRef.current?.updateSun();
+      wrapperRef.current?.querySelectorAll<HTMLElement>('[data-lat]').forEach(markNight);
+    };
+    refresh();
+    if (view !== 'daynight') return;
+    const timer = window.setInterval(refresh, SUN_UPDATE_MS);
+    return () => window.clearInterval(timer);
+  }, [view, landReady, markNight]);
 
   // Hover: find what's under the pointer from its lat/lng (the merged meshes have no per-region objects).
   useEffect(() => {
@@ -460,6 +506,8 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
       const m = d as Marker;
       // The globe positions `el` with its own CSS transform, so animations live on inner elements.
       const el = document.createElement('div');
+      el.dataset.lat = String(m.lat);
+      el.dataset.lng = String(m.lng);
       if (m.kind === 'city' || m.kind === 'place') {
         const rankClass = m.kind === 'city' && m.rank !== 'city' ? (m.rank === 'capital' ? 'is-capital' : 'is-province-capital') : '';
         el.className = `city-marker ${rankClass}`;
@@ -468,6 +516,7 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
         label.className = 'city-label';
         label.textContent = m.name;
         el.append(label);
+        markNight(el);
         return el;
       }
       el.className = 'photo-bubble-anchor';
@@ -481,44 +530,48 @@ export default function Globe({ unlocked, revealAll = false, onOpen, onLockedCli
       };
       btn.onpointerenter = pauseSpin;
       el.appendChild(btn);
+      markNight(el);
       return el;
     },
-    [pauseSpin],
+    [pauseSpin, markNight],
   );
 
   return (
-    <div ref={wrapperRef} className="globe-wrapper">
-      <GlobeGL
-        ref={globeRef}
-        width={size.w}
-        height={size.h}
-        backgroundColor="rgba(0,0,0,0)"
-        globeMaterial={globeMaterial}
-        showAtmosphere
-        atmosphereColor="#c9f0ff"
-        atmosphereAltitude={0.22}
-        onGlobeReady={handleReady}
-        showPointerCursor={false}
-        onGlobeClick={({ lat, lng }, event) => {
-          const t = targetAt(lat, lng);
-          if (!t) return;
-          const open = t.province ? unlockedProvinces.has(t.province.id) : unlockedCountries.has(t.country.iso);
-          if (open) flyTo(t);
-          else onLockedClick(t, event.clientX, event.clientY);
-        }}
-        onZoom={handleZoom}
-        htmlElementsData={markers}
-        htmlLat="lat"
-        htmlLng="lng"
-        htmlAltitude={markerAltitude}
-        htmlElement={buildMarker}
-        htmlElementVisibilityModifier={(el, visible) => {
-          el.style.opacity = visible ? '1' : '0';
-          // Cities and symbols are decoration: clicks pass through them to the land underneath.
-          if (el.classList.contains('photo-bubble-anchor')) el.style.pointerEvents = visible ? 'auto' : 'none';
-        }}
-      />
+    <>
+      <div ref={wrapperRef} className="globe-wrapper">
+        <GlobeGL
+          ref={globeRef}
+          width={size.w}
+          height={size.h}
+          backgroundColor="rgba(0,0,0,0)"
+          globeMaterial={globeMaterial}
+          showAtmosphere
+          atmosphereColor="#c9f0ff"
+          atmosphereAltitude={0.22}
+          onGlobeReady={handleReady}
+          showPointerCursor={false}
+          onGlobeClick={({ lat, lng }, event) => {
+            const t = targetAt(lat, lng);
+            if (!t) return;
+            const open = t.province ? unlockedProvinces.has(t.province.id) : unlockedCountries.has(t.country.iso);
+            if (open) flyTo(t);
+            else onLockedClick(t, event.clientX, event.clientY);
+          }}
+          onZoom={handleZoom}
+          htmlElementsData={markers}
+          htmlLat="lat"
+          htmlLng="lng"
+          htmlAltitude={markerAltitude}
+          htmlElement={buildMarker}
+          htmlElementVisibilityModifier={(el, visible) => {
+            el.style.opacity = visible ? '1' : '0';
+            // Cities and symbols are decoration: clicks pass through them to the land underneath.
+            if (el.classList.contains('photo-bubble-anchor')) el.style.pointerEvents = visible ? 'auto' : 'none';
+          }}
+        />
+      </div>
+      {/* Outside the globe's stacking layer, so the tooltip draws above every marker. */}
       <div ref={tipRef} className="globe-tip-floating" />
-    </div>
+    </>
   );
 }

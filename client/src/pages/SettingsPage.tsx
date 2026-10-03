@@ -1,22 +1,36 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { api } from '../lib/api';
+import { api, type GlobeView } from '../lib/api';
 import { THEMES, type ThemeId } from '../lib/themes';
 import ThemePreview from '../components/ThemePreview';
 import { DEV, setRevealAll, useRevealAll } from '../lib/devMode';
 import './SettingsPage.css';
 
+const GLOBE_VIEWS: { id: GlobeView; name: string; emoji: string; description: string }[] = [
+  { id: 'day', name: 'Day', emoji: '☀️', description: 'The whole globe in bright daylight.' },
+  {
+    id: 'daynight',
+    name: 'Day/Night cycle',
+    emoji: '🌗',
+    description: 'Real-time day and night for right now. Night areas are shaded gray, and places there glow.',
+  },
+];
+
 export default function SettingsPage() {
   const navigate = useNavigate();
   const [defaultTheme, setDefaultTheme] = useState<ThemeId | null>(null);
+  const [globeView, setGlobeView] = useState<GlobeView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     api
       .settings()
-      .then((s) => setDefaultTheme(s.defaultTheme))
+      .then((s) => {
+        setDefaultTheme(s.defaultTheme);
+        setGlobeView(s.globeView);
+      })
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -25,6 +39,19 @@ export default function SettingsPage() {
     const t = setTimeout(() => setSaved(false), 1800);
     return () => clearTimeout(t);
   }, [saved]);
+
+  const chooseView = async (view: GlobeView) => {
+    if (view === globeView) return;
+    const previous = globeView;
+    setGlobeView(view);
+    try {
+      await api.saveSettings({ globeView: view });
+      setSaved(true);
+    } catch (e) {
+      setGlobeView(previous);
+      setError((e as Error).message);
+    }
+  };
 
   const choose = async (theme: ThemeId) => {
     if (theme === defaultTheme) return;
@@ -59,6 +86,35 @@ export default function SettingsPage() {
       </header>
 
       {error && <div className="settings-error">😿 {error}</div>}
+
+      <section className="settings-section card">
+        <h2 className="title">🌍 Globe view</h2>
+        <p className="settings-hint">How the globe on the home page looks.</p>
+        <div className="theme-options" role="radiogroup" aria-label="Globe view">
+          {GLOBE_VIEWS.map((v) => {
+            const selected = v.id === globeView;
+            return (
+              <button
+                key={v.id}
+                role="radio"
+                aria-checked={selected}
+                className={`theme-option ${selected ? 'is-selected' : ''}`}
+                onClick={() => chooseView(v.id)}
+                disabled={globeView === null}
+              >
+                <div className={`globe-view-preview is-${v.id}`} aria-hidden="true">
+                  <span className="globe-view-ball" />
+                </div>
+                <span className="theme-option-name">
+                  {v.emoji} {v.name}
+                  {selected && <span className="theme-option-badge">On</span>}
+                </span>
+                <span className="theme-option-desc">{v.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <section className="settings-section card">
         <h2 className="title">🎨 Default theme</h2>

@@ -28,6 +28,35 @@
   line-height: 1.45;
 }
 
+.settings-section + .settings-section {
+  margin-top: 24px;
+}
+
+/* Little globe previews for the globe view choice */
+.globe-view-preview {
+  display: grid;
+  place-items: center;
+  height: 96px;
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 50% 45%, #232838 0%, #0b0c11 100%);
+}
+.globe-view-ball {
+  width: 64px;
+  height: 64px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 40%, #ffffff 0 18%, transparent 19%), var(--ocean);
+  box-shadow: 0 0 14px rgba(201, 240, 255, 0.6);
+}
+.is-daynight .globe-view-ball {
+  background:
+    linear-gradient(110deg, transparent 0 52%, rgba(29, 34, 54, 0.62) 60%),
+    radial-gradient(circle at 35% 40%, #ffffff 0 18%, transparent 19%),
+    radial-gradient(circle at 72% 62%, #ffe58a 0 4%, transparent 5%),
+    var(--ocean);
+}
+
 .theme-options {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -58,7 +87,6 @@
 
 /* Developer site tools */
 .dev-tools {
-  margin-top: 24px;
   border-style: dashed;
   background: #fffbe8;
 }

@@ -163,12 +163,12 @@
   opacity: 1;
 }
 
-/* Country tooltip that follows the pointer */
+/* Country tooltip that follows the pointer: above globe markers and the page header */
 .globe-tip-floating {
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 6;
+  z-index: 20;
   display: none;
   pointer-events: none;
 }
@@ -176,4 +176,14 @@
 /* Keep the globe's marker z-indexes (globe.gl sets large ones) inside the globe, below the page header. */
 .globe-wrapper {
   isolation: isolate;
+}
+
+/* Day/night view: markers on the night side glow like lit windows */
+.is-night .map-icon {
+  filter: drop-shadow(0 0 3px #ffe9a3) drop-shadow(0 0 9px rgba(255, 214, 110, 0.9));
+}
+.is-night .photo-bubble {
+  box-shadow:
+    0 0 10px 3px rgba(255, 220, 120, 0.9),
+    0 0 26px 8px rgba(255, 200, 90, 0.45);
 }

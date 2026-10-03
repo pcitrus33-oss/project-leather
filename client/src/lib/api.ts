@@ -70,8 +70,12 @@ export interface CountryPhotos {
   provinces: UnlockedProvince[];
 }
 
+/** How the globe is drawn (keep in sync with GLOBE_VIEWS in server/src/db.ts). */
+export type GlobeView = 'day' | 'daynight';
+
 export interface Settings {
   defaultTheme: ThemeId;
+  globeView: GlobeView;
 }
 
 export interface UploadResult {
@@ -121,7 +125,8 @@ export const api = {
 
   settings: () => request<Settings>('/api/settings'),
 
-  saveSettings: (settings: Settings) => request<Settings>('/api/settings', json('PUT', settings)),
+  /** Saves only the settings given. */
+  saveSettings: (settings: Partial<Settings>) => request<Settings>('/api/settings', json('PUT', settings)),
 
   deletePhoto: (id: string) =>
     request<{ relocked: boolean; provinceRelocked: boolean }>(`/api/photos/${id}`, { method: 'DELETE' }),
