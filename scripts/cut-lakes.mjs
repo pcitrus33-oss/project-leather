@@ -32,7 +32,9 @@ function cutPolygon(coords) {
     .difference(coords, ...hits)
     .map((rings) =>
       rings
-        .map((ring) => ring.map(([x, y]) => [round(x), round(y)]).filter((p, i, r) => i === 0 || p[0] !== r[i - 1][0] || p[1] !== r[i - 1][1]))
+        // polygon-clipping winds outer rings counter-clockwise; d3 (silhouettes, areas, centroids) reads
+        // that as "the whole sphere except this shape", so flip them back to clockwise like the sources.
+        .map((ring) => ring.map(([x, y]) => [round(x), round(y)]).filter((p, i, r) => i === 0 || p[0] !== r[i - 1][0] || p[1] !== r[i - 1][1]).reverse())
         .filter((ring) => ring.length >= 4),
     )
     .filter((rings) => rings.length && rings[0].length >= 4);
