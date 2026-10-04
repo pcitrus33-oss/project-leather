@@ -65,7 +65,7 @@ export default function CountriesSheet({
             onPointerDown={(e) => e.stopPropagation()}
           >
             <span className="countries-grip" aria-hidden="true" />
-            🗺️ My countries · {rows.length}
+            My countries · {rows.length}
           </motion.button>
         )}
       </AnimatePresence>
@@ -94,14 +94,14 @@ export default function CountriesSheet({
               aria-label="Back to the globe"
             >
               <span className="countries-grip" aria-hidden="true" />
-              🌍 Pull down for the globe
+              Pull down for the globe
             </button>
             <div className="countries-sheet-head">
               <h2 className="title">Countries visited</h2>
               <input
                 className="input"
                 type="search"
-                placeholder="🔍 Find a country…"
+                placeholder="Find a country…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />

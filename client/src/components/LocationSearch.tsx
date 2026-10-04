@@ -49,18 +49,18 @@ export default function LocationSearch({ alpha2, onPick }: Props) {
           autoFocus
         />
         <button className="btn btn-yellow" type="submit" disabled={busy || query.trim().length < 2}>
-          {busy ? '…' : '🔍'}
+          {busy ? '…' : 'Search'}
         </button>
       </form>
 
-      {error && <div className="location-search-note is-error">😿 {error}</div>}
+      {error && <div className="location-search-note is-error">{error}</div>}
       {results?.length === 0 && <div className="location-search-note">No places found. Try another spelling?</div>}
       {results && results.length > 0 && (
         <ul className="location-results">
           {results.map((r) => (
             <li key={`${r.lat},${r.lng},${r.detail}`}>
               <button onClick={() => onPick({ lat: r.lat, lng: r.lng, name: r.name, kind: r.kind })}>
-                <b>📍 {r.name}</b>
+                <b>{r.name}</b>
                 <span>{r.detail}</span>
               </button>
             </li>

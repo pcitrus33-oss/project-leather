@@ -8,7 +8,7 @@ import { featureTest, polygonSurface, R, toVector } from './sphere';
  * of the globe radius), on the GPU. Only vertices above the globe surface move, so a region's top and
  * the upper edge of its sides rise while the sides' bottom stays on the ground.
  */
-export function withLift<M extends THREE.Material>(material: M): M {
+function withLift<M extends THREE.Material>(material: M): M {
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float lift;')

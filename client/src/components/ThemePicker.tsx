@@ -9,7 +9,7 @@ interface Props {
   disabled?: boolean;
 }
 
-/** "🎨 Theme" button with a drop-down of theme cards, for one country's page. */
+/** "Theme" button with a drop-down of theme cards, for one country's page. */
 export default function ThemePicker({ value, onChange, disabled }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -30,7 +30,7 @@ export default function ThemePicker({ value, onChange, disabled }: Props) {
   return (
     <div className="theme-picker" ref={rootRef}>
       <button className="btn" onClick={() => setOpen((o) => !o)} disabled={disabled} aria-expanded={open}>
-        🎨 {getTheme(value).name}
+        {getTheme(value).name}
       </button>
       <AnimatePresence>
         {open && (
@@ -57,7 +57,7 @@ export default function ThemePicker({ value, onChange, disabled }: Props) {
               >
                 <ThemePreview theme={t.id} />
                 <span className="theme-option-name">
-                  {t.emoji} {t.name}
+                  {t.name}
                 </span>
               </button>
             ))}

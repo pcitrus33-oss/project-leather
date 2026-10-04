@@ -10,34 +10,48 @@ import {
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'motion/react';
+import type { CSSProperties } from 'react';
 import type { Location, Photo } from '../lib/api';
 import './PhotoGrid.css';
 
 interface ViewProps {
   photos: Photo[];
-  coverId: string | null;
   onOpen: (index: number) => void;
 }
 
-export function PhotoGrid({ photos, coverId, onOpen }: ViewProps) {
+/**
+ * Photos at their own shape, never cropped, in justified rows that keep the saved order left to right.
+ * Each cell grows in proportion to its aspect ratio (`--r`), so every photo in a row gets the same height;
+ * the grid's ::after soaks up the last row so it isn't stretched.
+ */
+export function PhotoGrid({ photos, onOpen }: ViewProps) {
   return (
-    <div className="photo-grid">
-      {photos.map((p, i) => (
-        <motion.button
-          key={p.id}
-          className="photo-tile"
-          onClick={() => onOpen(i)}
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ delay: Math.min(i * 0.04, 0.6), type: 'spring', stiffness: 300, damping: 22 }}
-          style={{ rotate: `${((i * 7) % 5) - 2}deg` }}
-          whileHover={{ rotate: 0, scale: 1.03 }}
-        >
-          <img src={p.thumbUrl} alt={p.caption} loading="lazy" />
-          {p.id === coverId && <span className="photo-cover-badge" title="Cover photo">⭐</span>}
-          {p.caption && <span className="photo-caption">{p.caption}</span>}
-        </motion.button>
-      ))}
+    <div className="photo-rows">
+      {photos.map((p, i) => {
+        const r = p.width && p.height ? p.width / p.height : 1;
+        return (
+          <motion.button
+            key={p.id}
+            className="photo-cell"
+            style={{ '--r': r } as CSSProperties}
+            onClick={() => onOpen(i)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: Math.min(i * 0.03, 0.5), duration: 0.5 }}
+          >
+            <motion.img
+              layoutId={`photo-${p.id}`}
+              src={p.thumbUrl}
+              srcSet={`${p.thumbUrl} 640w, ${p.webUrl} 2048w`}
+              sizes={`${Math.round(r * 320)}px`}
+              width={p.width}
+              height={p.height}
+              alt={p.caption}
+              loading="lazy"
+            />
+          </motion.button>
+        );
+      })}
     </div>
   );
 }
@@ -131,7 +145,7 @@ function SortableTile({ photo, caption, location, isCover, busy, onCaption, onCo
     >
       <div className="edit-tile-image" {...attributes} {...listeners} title="Drag to move">
         <img src={photo.thumbUrl} alt="" draggable={false} />
-        <span className="edit-tile-grip">✥</span>
+        <span className="edit-tile-grip" aria-hidden="true">⠿</span>
       </div>
       <div className="edit-tile-tools">
         <button
@@ -139,15 +153,15 @@ function SortableTile({ photo, caption, location, isCover, busy, onCaption, onCo
           onClick={onCover}
           title={isCover ? 'This is the cover photo' : 'Use as cover photo on the globe'}
         >
-          {isCover ? '⭐' : '☆'}
+          {isCover ? '★' : '☆'}
         </button>
         <button className="btn btn-icon" onClick={onDelete} title="Delete photo" disabled={busy}>
-          🗑️
+          ×
         </button>
       </div>
       <input
         className="input edit-tile-caption"
-        placeholder="Add a caption…"
+        placeholder="Title"
         value={caption}
         maxLength={500}
         onChange={(e) => onCaption(e.target.value)}
@@ -155,15 +169,15 @@ function SortableTile({ photo, caption, location, isCover, busy, onCaption, onCo
       {location ? (
         <span className="location-chip edit-tile-location">
           <button className="edit-tile-location-name" onClick={onLocate} title="Change place">
-            📍 {location.name}
+            {location.name}
           </button>
           <button onClick={onClearLocation} aria-label="Remove place">
-            ✕
+            ×
           </button>
         </span>
       ) : (
         <button className="btn edit-tile-add-location" onClick={onLocate}>
-          📍 Add place
+          + Place
         </button>
       )}
     </div>

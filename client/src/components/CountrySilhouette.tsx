@@ -3,7 +3,7 @@ import { geoMercator, geoPath } from 'd3-geo';
 import type { Country } from '../lib/countries';
 import type { Province } from '../lib/provinces';
 
-/** A little flat cartoon outline of a country (or province) for the page header. */
+/** A thin line outline of a country (or province) for the page header. */
 export default function CountrySilhouette({ country, size = 96 }: { country: Country | Province; size?: number }) {
   const d = useMemo(() => {
     // Rotate to the country first so shapes crossing the date line (Russia, Fiji) stay in one piece.
@@ -21,7 +21,7 @@ export default function CountrySilhouette({ country, size = 96 }: { country: Cou
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <path d={d} fill="white" stroke="var(--ink)" strokeWidth={3} strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="var(--ink)" strokeWidth={1.25} strokeLinejoin="round" />
     </svg>
   );
 }

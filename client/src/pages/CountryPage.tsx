@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { motion } from 'motion/react';
-import Lightbox from 'yet-another-react-lightbox';
-import Captions from 'yet-another-react-lightbox/plugins/captions';
-import 'yet-another-react-lightbox/styles.css';
-import 'yet-another-react-lightbox/plugins/captions.css';
+import { AnimatePresence, motion } from 'motion/react';
 import { api, type Location, type Photo, type UnlockedProvince, type UploadResult } from '../lib/api';
 import { getCountry } from '../lib/countries';
 import { getProvince, hasProvinces, provinceWord } from '../lib/provinces';
@@ -14,7 +10,7 @@ import CountrySilhouette from '../components/CountrySilhouette';
 import UnlockModal from '../components/UnlockModal';
 import { EditablePhotoGrid, PhotoGrid } from '../components/PhotoGrid';
 import Flag from '../components/Flag';
-import AirplaneGallery from '../components/AirplaneGallery';
+import PhotoDetail from '../components/PhotoDetail';
 import ThemePicker from '../components/ThemePicker';
 import LocationSearch from '../components/LocationSearch';
 import SideDock from '../components/SideDock';
@@ -157,6 +153,7 @@ export default function CountryPage() {
         return;
       }
       setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+      setLightboxIndex((i) => Math.min(i, photos.length - 2));
       if (coverId === photo.id) setCoverId(null);
       setDraft((d) =>
         d && {
@@ -170,6 +167,12 @@ export default function CountryPage() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const setCoverNow = async (id: string) => {
+    if (!country) return;
+    await api.setCover(country.iso, id, scopeId);
+    setCoverId(id);
   };
 
   const handleUploaded = (_iso: string, result: UploadResult, uploadedTo: string | null) => {
@@ -197,45 +200,42 @@ export default function CountryPage() {
   return (
     <motion.div
       className={`country-page theme-${theme}`}
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+      transition={{ duration: 0.45, ease: 'easeOut' }}
     >
       <header className="country-header">
-        {province ? (
-          <div className="country-back">
-            <button className="btn" onClick={() => navigate('/')}>
-              ← 🌍 Globe
-            </button>
-            <button className="btn" onClick={() => navigate(`/country/${iso}`)}>
-              ← <Flag country={country} /> {country.name}
-            </button>
-          </div>
-        ) : (
-          <button className="btn" onClick={goBack}>
-            ← 🌍 Globe
+        <div className="country-header-side">
+          <button className="btn btn-quiet" onClick={province ? () => navigate('/') : goBack}>
+            ← Globe
           </button>
-        )}
+        </div>
 
         <div className="country-heading">
           <div className="country-silhouette">
-            <CountrySilhouette country={place!} />
+            <CountrySilhouette country={place!} size={64} />
           </div>
-          <div>
-            <h1 className="title country-name">
-              <span className="country-name-flag"><Flag country={country} /></span> {place!.name}
-            </h1>
-            <div className="country-sub">
-              {province && `${province.type}, ${country.name} · `}
+          <h1 className="title country-name">{place!.name}</h1>
+          <div className="eyebrow country-sub">
+            <Flag country={country} />
+            <span>
+              {province && `${province.type} · ${country.name} · `}
               {loading
                 ? 'Loading…'
                 : catalogue
-                  ? `${provinces.length} ${provinceWord(iso)}${provinces.length === 1 ? '' : 's'} unlocked · ${photos.length} photo${photos.length === 1 ? '' : 's'}`
+                  ? `${provinces.length} ${provinceWord(iso)}${provinces.length === 1 ? '' : 's'} · ${photos.length} photo${photos.length === 1 ? '' : 's'}`
                   : `${photos.length} photo${photos.length === 1 ? '' : 's'}`}
-            </div>
+            </span>
           </div>
         </div>
 
+        <div className="country-header-side is-end">
+          {province && (
+            <button className="btn btn-quiet" onClick={() => navigate(`/country/${iso}`)}>
+              ← {country.name}
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Kept out while editing, so Save and Cancel are always in reach. */}
@@ -243,7 +243,7 @@ export default function CountryPage() {
         {draft ? (
           <>
             <button className="btn btn-mint" onClick={saveEditing} disabled={saving || !dirty}>
-              {saving ? 'Saving…' : '💾 Save'}
+              {saving ? 'Saving…' : 'Save'}
             </button>
             <button className="btn" onClick={cancelEditing} disabled={saving}>
               Cancel
@@ -254,14 +254,14 @@ export default function CountryPage() {
             {!catalogue && photos.length > 0 && <ThemePicker value={theme} onChange={changeTheme} />}
             {!catalogue && photos.length > 0 && (
               <button className="btn" onClick={startEditing}>
-                ✏️ {photos.length > 1 ? 'Edit layout' : 'Edit'}
+                {photos.length > 1 ? 'Edit layout' : 'Edit'}
               </button>
             )}
             <button className="btn btn-pink" onClick={() => setAddOpen(true)}>
-              📸 Add photos
+              Add photos
             </button>
             <Link to="/settings" className="btn">
-              ⚙️ Settings
+              Settings
             </Link>
           </>
         )}
@@ -269,16 +269,15 @@ export default function CountryPage() {
 
       {draft && (
         <div className="edit-banner">
-          Drag photos to rearrange · ⭐ picks the globe cover · 📍 tags where it was taken · type to caption. Hit <b>Save</b> on the right when you’re happy!
+          Drag photos to rearrange · ★ picks the globe cover · type a title · add a place. Press <b>Save</b> on the right when you’re done.
         </div>
       )}
 
       <main className="country-main">
-        {error && <div className="country-error">😿 {error}</div>}
+        {error && <div className="country-error">{error}</div>}
 
         {!loading && !error && photos.length === 0 && (
-          <div className="country-empty card">
-            <div className="country-empty-icon">🔒</div>
+          <div className="country-empty">
             <h2 className="title">{place!.name} is still locked</h2>
             <p>
               {catalogue
@@ -286,7 +285,7 @@ export default function CountryPage() {
                 : 'Add your first photos from here to unlock it on your globe.'}
             </p>
             <button className="btn btn-pink btn-big" onClick={() => setAddOpen(true)}>
-              🔓 Unlock it!
+              Unlock it
             </button>
           </div>
         )}
@@ -307,34 +306,34 @@ export default function CountryPage() {
             onLocate={setLocatingId}
             onClearLocation={(id) => setDraft({ ...draft, locations: { ...draft.locations, [id]: null } })}
           />
-        ) : photos.length === 0 ? null : theme === 'airplane' ? (
-          <AirplaneGallery photos={photos} onOpen={setLightboxIndex} />
-        ) : (
-          <PhotoGrid photos={photos} coverId={effectiveCover} onOpen={setLightboxIndex} />
+        ) : photos.length === 0 ? null : (
+          <PhotoGrid photos={photos} onOpen={setLightboxIndex} />
         )}
       </main>
 
-      <Lightbox
-        open={lightboxIndex >= 0}
-        index={lightboxIndex}
-        close={() => setLightboxIndex(-1)}
-        plugins={[Captions]}
-        captions={{ descriptionTextAlign: 'center' }}
-        slides={photos.map((p) => ({
-          src: p.webUrl,
-          width: p.width,
-          height: p.height,
-          description: [p.caption, p.location && `📍 ${p.location.name}`].filter(Boolean).join('  ·  ') || undefined,
-        }))}
-      />
+      <AnimatePresence>
+        {lightboxIndex >= 0 && photos[lightboxIndex] && (
+          <PhotoDetail
+            photos={photos}
+            index={lightboxIndex}
+            coverId={effectiveCover}
+            alpha2={country.alpha2}
+            onIndex={setLightboxIndex}
+            onClose={() => setLightboxIndex(-1)}
+            onChange={(next) => setPhotos((prev) => prev.map((p) => (p.id === next.id ? next : p)))}
+            onCover={setCoverNow}
+            onDelete={deletePhoto}
+          />
+        )}
+      </AnimatePresence>
 
       {locatingId && draft && (
         <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setLocatingId(null)}>
           <div className="modal card" role="dialog" aria-modal="true">
-            <button className="btn btn-icon modal-close" onClick={() => setLocatingId(null)} aria-label="Close">
-              ✕
+            <button className="btn btn-icon btn-quiet modal-close" onClick={() => setLocatingId(null)} aria-label="Close">
+              ×
             </button>
-            <h2 className="title modal-title">📍 Where was this taken?</h2>
+            <h2 className="title modal-title">Where was this taken?</h2>
             <LocationSearch
               alpha2={country.alpha2}
               onPick={(place) => {
@@ -384,7 +383,7 @@ function ProvinceCatalogue({ iso, provinces, onOpen }: { iso: string; provinces:
       ))}
       {rows.length > 0 && (
         <li className="province-catalogue-hint">
-          Zoom in on the globe to see every {provinceWord(iso)}, or use 📸 Add photos to unlock another.
+          Zoom in on the globe to see every {provinceWord(iso)}, or use Add photos to unlock another.
         </li>
       )}
     </ul>

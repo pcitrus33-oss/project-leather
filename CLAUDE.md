@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"Project Leather" (a placeholder name; the user will choose the real one later): a **single-user, local-only** photo portfolio organised by country instead of time. It is deliberately *not* a social platform, so there are no accounts, feeds or sharing. The home page is a cartoon 3D globe: gray = locked country, white = unlocked (has photos), with photo "bubbles" on unlocked countries. Each country has its own page that shows its photos in that country's chosen **theme**, plus a drag-to-rearrange edit mode. **The USA, Canada and China are split into provinces/states** (visible when zoomed in), each unlocked separately with its own photo page; those countries' pages are a catalogue of their unlocked provinces. The visual style should stay cute and cartoonish, never realistic.
+"Project Leather" (a placeholder name; the user will choose the real one later): a **single-user, local-only** photo portfolio organised by country instead of time. It is deliberately *not* a social platform, so there are no accounts, feeds or sharing. The home page is a cartoon 3D globe: gray = locked country, white = unlocked (has photos), with photo "bubbles" on unlocked countries. Each country has its own page that shows its photos in that country's chosen **theme**, plus a drag-to-rearrange edit mode. **The USA, Canada and China are split into provinces/states** (visible when zoomed in), each unlocked separately with its own photo page; those countries' pages are a catalogue of their unlocked provinces. **Two styles (since v2.4):** the globe stays cute and cartoonish (never realistic); every other page (photo pages, lists, upload window, settings, the dock and the countries list) is **minimal**, modelled on travel-photography portfolios: off-white page, thin lines, Josefin Sans titles in spaced capitals, Mulish body text, no emoji.
 
 ## Commands
 
@@ -35,7 +35,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
 - `db.ts` uses Node's **built-in `node:sqlite`** (`DatabaseSync`), not better-sqlite3, so there is no native build. It has four tables:
   - `countries(iso, cover_photo_id, unlocked_at, theme)`
   - `provinces(id, iso, cover_photo_id, theme, unlocked_at)`: unlocked provinces of USA/CAN/CHN, ids like `CA-ON`.
-  - `photos(id, iso, province, original_ext, width, height, caption, sort_order, created_at, lat, lng, place, place_kind)`: `province` is required for USA/CAN/CHN uploads; the place fields are null until tagged.
+  - `photos(id, iso, province, original_ext, width, height, caption, story, sort_order, created_at, lat, lng, place, place_kind)`: `caption` is the photo's title and `story` its longer text, both shown only in the close-up view. `province` is required for USA/CAN/CHN uploads; the place fields are null until tagged.
   - `settings(key, value)`: `default_theme` and `globe_view` (`day` | `daynight`; `GLOBE_VIEWS` must match `GlobeView` in client/src/lib/api.ts). `PUT /api/settings` saves any subset.
 - **Developer sandbox:** `paths.ts` switches to `data-dev/` and port 3002 when started with `--dev`. `dev.ts` (`/api/dev/seed`, `/api/dev/reset`) is mounted only then.
 - **Schema changes** must be additive in-place migrations in `db.ts` (see how the `theme` column is added via `PRAGMA table_info`). The user's real database already exists, so never recreate it.
@@ -51,7 +51,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - Valid province ids come from `client/src/data/provinces.json` (read by `provinces.ts`).
 - **Places:** `/api/countries` returns, per country, `pins` (photos grouped by place, with rounded lat/lng, `kind` and `province`), `unplacedCount` and its unlocked `provinces`. `/api/geocode` proxies OpenStreetMap Nominatim and classifies each result's `kind` (`places.ts`; keep `PLACE_KINDS` in sync with `PlaceKind` in client/src/lib/api.ts).
   - **Nominatim usage policy:** at most ~1 request/second (enforced server-side), an identifying User-Agent, search on submit rather than per keystroke, and an OSM credit shown in `LocationSearch`. Keep all four.
-- **Themes:** each country stores its own theme, set to `defaultTheme()` when it is first unlocked. Changing the default never touches existing countries. Theme ids live in `THEME_IDS` (server/src/db.ts) and `THEMES` (client/src/lib/themes.ts). **Keep the two lists in sync.**
+- **Themes:** each country stores its own theme, set to `defaultTheme()` when it is first unlocked. Changing the default never touches existing countries. Theme ids live in `THEME_IDS` (server/src/db.ts) and `THEMES` (client/src/lib/themes.ts). **Keep the two lists in sync.** Only `classic` exists now (airplane was removed in v2.4; a startup migration moves rows with a removed theme back to classic). The user wants the picker and default-theme setting kept because more themes will come.
 - `paths.ts` resolves `data/` relative to the repo root. `data/` holds the user's real photos and DB. It is git-ignored and must never be committed or wiped.
 
 **Client (`client/src`)**
@@ -106,15 +106,18 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - **Type cast:** `polygonGeoJsonGeometry` needs an `as never` cast because the library's own GeoJSON types are too narrow.
 - **Flags:** Windows can't render flag emoji. Use the `flag-icons` CSS through `<Flag>` or `flagHtml()` (the latter for raw-HTML contexts like globe tooltips).
 - **Routes:** `/country/:iso` and `/country/:iso/:province`, both handled by `pages/CountryPage.tsx`. For USA/CAN/CHN, `/country/:iso` renders `ProvinceCatalogue` (rows are the shared `components/PlaceRow`); a province page has buttons back to the globe and to the country.
-- **Right-edge menus:** `components/SideDock` is a slide-out with a tab: hover or click to open, and it closes 700 ms after the pointer leaves; `pinned` keeps it out. The globe page pins it while nothing is unlocked; CountryPage puts Theme / Edit / Add photos / Settings in it and pins it while editing (Save / Cancel). Inside it, the ThemePicker menu opens to the left.
+- **Right-edge menus:** `components/SideDock` is a slide-out with a tab: hover or click to open, and it closes 700 ms after the pointer leaves; `pinned` keeps it out. The globe page pins it while nothing is unlocked; CountryPage puts Theme / Edit / Add photos / Settings in it and pins it while editing (Save / Cancel); `PhotoDetail` has its own for the photo. Inside it, the ThemePicker menu opens to the left.
 - **Countries list:** `components/CountriesSheet` is a bottom tab on the globe page that pulls up a single-column list of visited countries (search, `PlaceRow`s); its handle drags or clicks back down. Open state is the `?countries` search param, set with `replace`, so Back from a country opened from the list returns to the open list.
 - **Developer site:** `lib/devMode.ts` sets `DEV` (`import.meta.env.MODE === 'developer'`) and the "Show everything" switch (`useRevealAll`, localStorage). The tools live in SettingsPage's `DeveloperTools`. Reveal is display-only; clicks still follow real data.
-- `pages/CountryPage.tsx` picks the view component by theme (`PhotoGrid` = classic, `AirplaneGallery` = airplane). Edit mode always uses the shared `EditablePhotoGrid`, whatever the theme.
+- **Page header:** the place's name is centred, with "← Globe" on the left and, on province pages, "← Country" on the right.
+- **Photo grid** (`PhotoGrid`, the classic theme): photos are never cropped. Justified rows: each cell's flex grow and basis come from its aspect ratio (`--r`), and `::after` soaks up the last row. This keeps the saved order left to right (CSS columns would read top to bottom). Captions are never shown on the grid.
+- **Close-up** (`components/PhotoDetail`, replaced yet-another-react-lightbox in v2.4): the photo enlarged on the left; the caption as a title and the story on the right. The photo it opens on grows out of the grid through a shared motion `layoutId` (`photo-<id>`). ←/→ step through photos and Esc closes. Its SideDock edits text (`api.setText`), place, cover and delete, saving straight away rather than through the page's draft.
+- `pages/CountryPage.tsx` picks the view component by theme (only `PhotoGrid` for now). Edit mode always uses the shared `EditablePhotoGrid` (square crops are fine while editing), whatever the theme.
   - **Edit mode** works on a local `draft` (order, captions, locations, cover). Save sends only the diffs: `PUT order`, `PATCH` captions and locations, `PUT cover`. Deletes happen immediately.
   - **Adding a theme:** add its id to both lists, write a gallery component, add a branch in `CountryPage` and a preview in `ThemePreview`.
 - **Back button:** it uses `navigate(-1)` when `history.state.idx > 0`, so browser Back/Forward stay consistent.
 - Uploads use XHR (`api.upload`) for progress events.
-- Styling: plain CSS per component plus design tokens in `styles/theme.css` (`--ink`, `--pink`, `.btn`, `.card`, `.chip`, …). The font is Fredoka.
+- Styling: plain CSS per component plus design tokens in `styles/theme.css` (`--ink`, `--line`, `--accent`, `--font-display`, `.btn`, `.btn-quiet`, `.card`, `.chip`, `.title`, `.eyebrow`, …). The `:root` tokens are minimal. `.globe-wrapper`, `.globe-tip-floating` and anything marked `.cartoon` (the globe page's locked popup, hint and alert) redefine them to the old cartoon values, so the globe keeps its look. `.btn-pink/-mint/-yellow` all mean "primary" outside `.cartoon`. Fonts come from `@fontsource-variable/josefin-sans` and `mulish` (local, no CDN).
 
 ## Verifying UI changes
 

@@ -138,13 +138,13 @@ export default function UnlockModal({
             role="dialog"
             aria-modal="true"
           >
-            <button className="btn btn-icon modal-close" onClick={onClose} disabled={busy} aria-label="Close">
-              ✕
+            <button className="btn btn-icon btn-quiet modal-close" onClick={onClose} disabled={busy} aria-label="Close">
+              ×
             </button>
 
             {!country ? (
               <>
-                <h2 className="title modal-title">🔓 Which country?</h2>
+                <h2 className="title modal-title">Which country?</h2>
                 <input
                   className="input"
                   placeholder="Search countries…"
@@ -168,7 +168,7 @@ export default function UnlockModal({
                       </button>
                     </li>
                   ))}
-                  {matches.length === 0 && <li className="country-empty">No country called “{query}” 🤔</li>}
+                  {matches.length === 0 && <li className="country-empty">No country called “{query}”</li>}
                 </ul>
               </>
             ) : needsProvince && !prov ? (
@@ -247,7 +247,7 @@ export default function UnlockModal({
                       e.target.value = '';
                     }}
                   />
-                  <div className="dropzone-icon">📸</div>
+                  <div className="dropzone-icon">+</div>
                   <div>
                     <b>Drop photos here</b> or click to choose
                   </div>
@@ -267,7 +267,7 @@ export default function UnlockModal({
                         <img src={f.url} alt="" />
                         {!busy && (
                           <button className="preview-remove" onClick={() => removeFile(i)} aria-label="Remove">
-                            ✕
+                            ×
                           </button>
                         )}
                       </motion.div>
@@ -277,13 +277,13 @@ export default function UnlockModal({
 
                 <div className="unlock-location">
                   <div className="unlock-location-title">
-                    📍 Where were these taken? <small>(optional, you can add it later too)</small>
+                    Where were these taken? <small>(optional, you can add it later too)</small>
                   </div>
                   {location ? (
                     <span className="location-chip">
-                      <span>📍 {location.name}</span>
+                      <span>{location.name}</span>
                       <button onClick={() => setLocation(null)} disabled={busy} aria-label="Remove place">
-                        ✕
+                        ×
                       </button>
                     </span>
                   ) : searchingPlace ? (
@@ -301,7 +301,7 @@ export default function UnlockModal({
                   )}
                 </div>
 
-                {error && <div className="modal-error">😿 {error}</div>}
+                {error && <div className="modal-error">{error}</div>}
 
                 {busy && (
                   <div className="progress">
@@ -315,9 +315,9 @@ export default function UnlockModal({
                     {busy ? (
                       <span className="spinner" />
                     ) : alreadyUnlocked ? (
-                      `Add ${files.length || ''} photo${files.length === 1 ? '' : 's'} ✨`
+                      `Add ${files.length || ''} photo${files.length === 1 ? '' : 's'}`
                     ) : (
-                      `Unlock it! 🔓`
+                      `Unlock it!`
                     )}
                   </button>
                 </div>

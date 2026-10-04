@@ -1,7 +1,23 @@
+/*
+ * Minimal style (v2.4): off-white page, thin lines, Josefin Sans titles in spaced capitals, Mulish text.
+ * The globe itself (and its little popups, marked .cartoon) keeps the original cartoon look; see the end.
+ */
 :root {
-  --ink: #2b3a67;
-  --ink-soft: #5b6a96;
-  --paper: #fffaf3;
+  --ink: #1f1f1f;
+  --ink-soft: #6f6f6f;
+  --line: #e3e1dc;
+  --paper: #ffffff;
+  --page: #f7f6f3;
+  --accent: #2a6f8a;
+  --danger: #b3412f;
+  --radius: 2px;
+  --shadow: none;
+  --shadow-lg: none;
+  --border: 1px solid var(--line);
+  --font: 'Mulish Variable', system-ui, sans-serif;
+  --font-display: 'Josefin Sans Variable', 'Mulish Variable', system-ui, sans-serif;
+
+  /* Cartoon palette: the globe, its popups and the confetti */
   --sky-top: #ffe6f2;
   --sky-bottom: #d9f1ff;
   --ocean: #8fd7f7;
@@ -10,12 +26,6 @@
   --yellow: #ffd36e;
   --mint: #7ee0c3;
   --lilac: #b9a6ff;
-  --danger: #ff6b6b;
-  --radius: 22px;
-  --shadow: 0 6px 0 rgba(43, 58, 103, 0.18);
-  --shadow-lg: 0 10px 0 rgba(43, 58, 103, 0.15), 0 20px 40px rgba(43, 58, 103, 0.15);
-  --border: 3px solid var(--ink);
-  --font: 'Fredoka Variable', 'Baloo 2', ui-rounded, system-ui, sans-serif;
 }
 
 *,
@@ -32,13 +42,14 @@ body,
 }
 
 html {
-  background-color: var(--sky-bottom);
+  background-color: var(--page);
 }
 
 body {
   font-family: var(--font);
   color: var(--ink);
-  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%) fixed;
+  background: var(--page);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -49,57 +60,77 @@ textarea {
   color: inherit;
 }
 
-/* ---------- Chunky cartoon buttons ---------- */
+/* ---------- Buttons: thin outlined capitals ---------- */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.45em;
-  padding: 0.6em 1.2em;
-  border: var(--border);
-  border-radius: 999px;
-  background: var(--paper);
-  box-shadow: var(--shadow);
-  font-weight: 600;
-  font-size: 1rem;
+  gap: 0.5em;
+  padding: 0.85em 1.4em 0.7em;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
   cursor: pointer;
   text-decoration: none;
+  color: var(--ink);
   transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    background 0.15s;
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
 }
 .btn:hover {
-  transform: translateY(-2px);
-}
-.btn:active {
-  transform: translateY(4px);
-  box-shadow: 0 2px 0 rgba(43, 58, 103, 0.18);
-}
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-}
-.btn-pink {
-  background: var(--pink);
+  background: var(--ink);
   color: white;
 }
-.btn-yellow {
-  background: var(--yellow);
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+  color: var(--ink);
 }
-.btn-mint {
-  background: var(--mint);
+/* Main action. (The colour names are from the cartoon days; they all mean "primary" now.) */
+.btn-pink,
+.btn-mint,
+.btn-yellow {
+  background: var(--ink);
+  color: white;
+}
+.btn-pink:hover,
+.btn-mint:hover,
+.btn-yellow:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.btn-pink:disabled,
+.btn-mint:disabled,
+.btn-yellow:disabled {
+  background: var(--ink);
+  color: white;
 }
 .btn-big {
-  font-size: 1.15rem;
-  padding: 0.75em 1.5em;
+  font-size: 0.9rem;
+  padding: 1em 1.8em 0.85em;
 }
 .btn-icon {
-  padding: 0.45em;
-  width: 2.4em;
-  height: 2.4em;
+  padding: 0;
+  width: 2.6em;
+  height: 2.6em;
   justify-content: center;
+  letter-spacing: 0;
+}
+/* Plain text link-style button */
+.btn-quiet {
+  border-color: transparent;
+}
+.btn-quiet:hover {
+  background: none;
+  color: var(--accent);
 }
 
 .chip {
@@ -110,65 +141,100 @@ textarea {
   border: var(--border);
   border-radius: 999px;
   background: var(--paper);
-  font-weight: 600;
-  box-shadow: var(--shadow);
+  font-size: 0.85rem;
 }
 
 .card {
   background: var(--paper);
   border: var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
 }
 
 .input {
   width: 100%;
-  padding: 0.6em 1em;
-  border: var(--border);
-  border-radius: 14px;
+  padding: 0.7em 0.9em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: white;
   outline: none;
 }
 .input:focus {
-  border-color: var(--pink);
+  border-color: var(--ink);
 }
 
 .title {
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   margin: 0;
 }
 
-@keyframes wobble {
-  0%,
-  100% {
-    transform: rotate(-3deg);
-  }
-  50% {
-    transform: rotate(3deg);
-  }
+/* Small spaced capitals above or below a title */
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-/* Flag images (flag-icons) styled as little cartoon stickers */
 .flag.fi {
   width: 1.33em;
   line-height: 1em;
+  vertical-align: -0.08em;
+  background-size: cover;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Cartoon look: the globe and its popups ---------- */
+.globe-wrapper,
+.globe-tip-floating,
+.cartoon {
+  --ink: #2b3a67;
+  --ink-soft: #5b6a96;
+  --paper: #fffaf3;
+  --radius: 22px;
+  --shadow: 0 6px 0 rgba(43, 58, 103, 0.18);
+  --shadow-lg: 0 10px 0 rgba(43, 58, 103, 0.15), 0 20px 40px rgba(43, 58, 103, 0.15);
+  --border: 3px solid var(--ink);
+  color: var(--ink);
+}
+.cartoon.card {
+  box-shadow: var(--shadow-lg);
+}
+.cartoon.chip {
+  border: var(--border);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+.cartoon .btn {
+  padding: 0.6em 1.2em;
+  border: var(--border);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+.cartoon .btn-yellow {
+  background: var(--yellow);
+}
+.cartoon .btn:hover {
+  transform: translateY(-2px);
+}
+.cartoon .flag.fi {
   border: 2px solid var(--ink);
   border-radius: 4px;
-  vertical-align: -0.1em;
-  background-size: cover;
+  box-shadow: none;
 }

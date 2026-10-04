@@ -89,33 +89,33 @@ export default function GlobePage() {
       <SideDock pinned={loaded && unlocked.length === 0} label="Globe menu">
         <div className="globe-dock-stat">
           <b>{unlocked.length}</b>
-          <span>🗺️ {unlocked.length === 1 ? 'Country' : 'Countries'} visited</span>
+          <span>{unlocked.length === 1 ? 'Country' : 'Countries'} visited</span>
         </div>
         <div className="globe-dock-stat">
           <b>{photoTotal}</b>
-          <span>📸 {photoTotal === 1 ? 'Photo' : 'Photos'} uploaded</span>
+          <span>{photoTotal === 1 ? 'Photo' : 'Photos'} uploaded</span>
         </div>
         <button className="btn btn-pink" onClick={() => setModal({ open: true })}>
-          🔓 Unlock a country
+          Unlock a country
         </button>
         <Link to="/settings" className="btn">
-          ⚙️ Settings
+          Settings
         </Link>
         {DEV && (
           <Link to="/settings" className="chip dev-chip" title="Developer site: sandbox data, see Settings for tools">
-            🛠️ Developer{revealAll ? ' · all shown' : ''}
+            Developer site{revealAll ? ' · all shown' : ''}
           </Link>
         )}
       </SideDock>
 
       <CountriesSheet unlocked={unlocked} open={listOpen} onOpenChange={setListOpen} />
 
-      {loadError && <div className="globe-alert chip">😿 Can’t reach the photo server — is it running?</div>}
+      {loadError && <div className="globe-alert chip cartoon">😿 Can’t reach the photo server — is it running?</div>}
 
       <AnimatePresence>
         {loaded && !loadError && unlocked.length === 0 && !modal.open && (
           <motion.div
-            className="globe-hint card"
+            className="globe-hint card cartoon"
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 20, opacity: 0 }}
@@ -128,7 +128,7 @@ export default function GlobePage() {
       <AnimatePresence>
         {lockedPopup && (
           <motion.div
-            className="locked-popup card"
+            className="locked-popup card cartoon"
             style={{
               left: Math.min(lockedPopup.x, window.innerWidth - 240),
               top: Math.min(lockedPopup.y + 12, window.innerHeight - 150),

@@ -8,27 +8,28 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 28px 12px;
-  border: var(--border);
+  gap: 8px;
+  padding: 10px 32px 14px;
+  border: 1px solid var(--line);
   border-bottom: none;
-  border-radius: 20px 20px 0 0;
-  background: var(--yellow);
-  box-shadow: var(--shadow);
-  font-family: var(--font);
-  font-size: 1.1rem;
-  font-weight: 700;
+  background: var(--paper);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   color: var(--ink);
   white-space: nowrap;
   cursor: pointer;
   touch-action: none; /* lets a swipe up open it */
 }
+.countries-tab:hover {
+  color: var(--accent);
+}
 .countries-grip {
-  width: 44px;
-  height: 5px;
-  border-radius: 3px;
-  background: var(--ink);
-  opacity: 0.5;
+  width: 36px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.4;
 }
 
 /* The pulled-up list stops short of the top, so the globe peeks out and it's clear it can go back down. */
@@ -39,12 +40,12 @@
   bottom: 0;
   left: 0;
   right: 0;
-  width: min(760px, 100%);
+  width: min(820px, 100%);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   border-bottom: none;
-  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
 .countries-sheet-handle {
@@ -52,12 +53,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 10px 0 6px;
+  gap: 8px;
+  padding: 12px 0 4px;
   border: none;
   background: none;
-  font-family: var(--font);
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   color: var(--ink-soft);
   cursor: grab;
   touch-action: none;
@@ -65,34 +68,33 @@
 .countries-sheet-head {
   flex: none;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 10px 16px;
-  padding: 4px 24px 14px;
+  gap: 16px;
+  padding: 14px 36px 22px;
 }
 .countries-sheet-head h2 {
-  margin: 0;
-  flex: 1;
-  white-space: nowrap;
+  font-size: 1.6rem;
+  font-weight: 300;
+  letter-spacing: 0.16em;
 }
 .countries-sheet-head .input {
-  flex: 1;
-  min-width: 200px;
+  max-width: 360px;
+  text-align: center;
 }
 .countries-sheet-list {
   flex: 1;
   overflow-y: auto;
   list-style: none;
   margin: 0;
-  padding: 6px 24px 28px;
+  padding: 0 36px 32px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 .countries-sheet-empty {
   text-align: center;
   color: var(--ink-soft);
-  padding: 16px;
+  padding: 24px;
 }
 
 @media (max-width: 600px) {
@@ -101,7 +103,7 @@
   }
   .countries-sheet-head,
   .countries-sheet-list {
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }

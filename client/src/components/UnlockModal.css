@@ -5,7 +5,7 @@
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(43, 58, 103, 0.35);
+  background: rgba(20, 20, 20, 0.35);
   backdrop-filter: blur(3px);
 }
 
@@ -21,7 +21,7 @@
 }
 
 .modal-title {
-  font-size: 1.6rem;
+  font-size: 1.25rem;
   padding-right: 48px;
 }
 
@@ -36,7 +36,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--pink-dark);
+  color: var(--accent);
   font-weight: 600;
   cursor: pointer;
   margin-top: -8px;
@@ -49,7 +49,7 @@
   max-height: 360px;
   overflow-y: auto;
   border: var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: white;
 }
 .country-list button {
@@ -59,7 +59,7 @@
   gap: 10px;
   padding: 10px 14px;
   border: none;
-  border-bottom: 2px dashed #e6e9f2;
+  border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
   cursor: pointer;
@@ -68,7 +68,7 @@
   border-bottom: none;
 }
 .country-list button:hover {
-  background: #fff0f7;
+  background: var(--page);
 }
 .country-flag {
   font-size: 1.4rem;
@@ -77,7 +77,7 @@
   margin-left: auto;
   padding: 2px 10px;
   border-radius: 999px;
-  background: var(--mint);
+  background: var(--page);
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -93,8 +93,8 @@
   align-items: center;
   gap: 4px;
   padding: 26px 16px;
-  border: 3px dashed var(--ink-soft);
-  border-radius: 20px;
+  border: 1px dashed #c9c6bf;
+  border-radius: var(--radius);
   background: white;
   text-align: center;
   cursor: pointer;
@@ -105,16 +105,15 @@
 }
 .dropzone:hover,
 .dropzone.is-dragging {
-  background: #fff4fa;
-  border-color: var(--pink);
-  transform: scale(1.01);
+  background: var(--page);
+  border-color: var(--ink);
 }
 .dropzone small {
   color: var(--ink-soft);
 }
 .dropzone-icon {
   font-size: 2.4rem;
-  animation: wobble 2s ease-in-out infinite;
+  font-weight: 200;
 }
 
 .preview-grid {
@@ -125,8 +124,8 @@
 .preview {
   position: relative;
   aspect-ratio: 1;
-  border: 3px solid var(--ink);
-  border-radius: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   overflow: hidden;
   background: white;
 }
@@ -143,7 +142,7 @@
   width: 24px;
   height: 24px;
   padding: 0;
-  border: 2px solid var(--ink);
+  border: 1px solid var(--line);
   border-radius: 50%;
   background: white;
   font-size: 11px;
@@ -152,8 +151,8 @@
 
 .modal-error {
   padding: 10px 14px;
-  border: 2px solid var(--danger);
-  border-radius: 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
   background: #fff0f0;
 }
 
@@ -172,7 +171,7 @@
 .progress-bar {
   position: absolute;
   inset: 0 auto 0 0;
-  background: repeating-linear-gradient(-45deg, var(--mint), var(--mint) 10px, #9ef0d6 10px, #9ef0d6 20px);
+  background: rgba(42, 111, 138, 0.22);
   transition: width 0.2s;
 }
 .progress span {
