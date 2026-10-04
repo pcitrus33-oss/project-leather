@@ -1,9 +1,10 @@
 // Builds client/src/data/provinces.json: states/provinces for the countries that have them on the globe,
-// each with its capital, from Natural Earth 1:50m admin-1 and 1:10m populated places.
+// each with its capital, from Natural Earth 1:50m admin-1 and 1:10m populated places. Large lakes are cut out.
 // Usage (from repo root): node scripts/build-provinces.mjs [admin1Geojson] [placesGeojson]
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { cutLakes } from './cut-lakes.mjs';
 
 const require = createRequire(path.resolve('client/package.json'));
 const { geoContains } = require('d3-geo');
@@ -62,10 +63,12 @@ const provinces = admin1.features
         lat: round(capital.geometry.coordinates[1]),
         lng: round(capital.geometry.coordinates[0]),
       }),
-      polygons: (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates)
-        // Thinning can shrink a tiny island's outline below a triangle; drop those islands entirely.
-        .filter((rings) => thin(rings[0]).length >= 4)
-        .map((rings) => rings.map(thin).filter((r) => r.length >= 4)),
+      polygons: cutLakes(
+        (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates)
+          // Thinning can shrink a tiny island's outline below a triangle; drop those islands entirely.
+          .filter((rings) => thin(rings[0]).length >= 4)
+          .map((rings) => rings.map(thin).filter((r) => r.length >= 4)),
+      ),
     };
   })
   .sort((a, b) => a.iso.localeCompare(b.iso) || a.name.localeCompare(b.name));

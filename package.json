@@ -13,6 +13,8 @@
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
+    "polygon-clipping": "^0.15.7",
+    "topojson-client": "^3.1.0",
     "topojson-simplify": "^3.0.3",
     "world-atlas": "^2.0.2"
   }

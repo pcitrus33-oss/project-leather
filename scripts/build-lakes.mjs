@@ -1,4 +1,5 @@
-// Builds client/src/data/lakes.json: large lakes from Natural Earth 1:50m, drawn on unlocked countries.
+// Builds scripts/lakes.json: large lakes from Natural Earth 1:50m. build-borders.mjs and build-provinces.mjs
+// cut them out of the land, so they show the ocean (rerun both after changing this list).
 // Usage (from repo root): node scripts/build-lakes.mjs [lakesGeojson]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +9,7 @@ const require = createRequire(path.resolve('client/package.json'));
 const { geoArea } = require('d3-geo');
 
 const SOURCE_URL = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_lakes.geojson';
-const OUT = path.resolve('client/src/data/lakes.json');
+const OUT = path.resolve('scripts/lakes.json');
 /** Lakes at least this big are drawn (64 lakes: the Great Lakes, Victoria, Baikal, Titicaca…). */
 const MIN_KM2 = 3000;
 /** Smaller lakes that matter anyway, by Natural Earth name (e.g. 'Dead Sea', 'Lac Léman'). */

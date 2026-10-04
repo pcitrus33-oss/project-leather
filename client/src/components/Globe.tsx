@@ -4,7 +4,6 @@ import * as THREE from 'three';
 import { COUNTRIES, flagHtml, getCountry, type Country } from '../lib/countries';
 import { PROVINCES, getProvince, hasProvinces, type Province } from '../lib/provinces';
 import cities from '../data/cities.json';
-import { buildAllLakes, loadLakes } from '../lib/lakes';
 import { installCameraTilt } from '../lib/cameraTilt';
 import { buildNightShade, isNightAt, sunDirection } from '../lib/dayNight';
 import { cityIconHtml, placeIconHtml, type CityRank } from './mapIcons';
@@ -205,7 +204,6 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
   const zoomedInRef = useRef(false);
   const nightRef = useRef<ReturnType<typeof buildNightShade> | null>(null);
   const cloudsRef = useRef<ReturnType<typeof makeClouds> | null>(null);
-  const lakesRef = useRef<ReturnType<typeof buildAllLakes> | null>(null);
   const applyLiftsRef = useRef<() => void>(() => {});
   const sunRef = useRef(sunDirection());
   const viewRef = useRef(view);
@@ -259,7 +257,7 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     for (const p of PROVINCES) paint(land.provinces, p.id, shownProvince(p.id), hovered === `p:${p.id}`);
   }, [landReady, shownCountry, shownProvince, hovered]);
 
-  // Raise unlocked land (and the lakes on it); sink province countries' own shape while provinces show.
+  // Raise unlocked land; sink province countries' own shape while provinces show.
   const applyLifts = useCallback(() => {
     const land = landRef.current;
     if (!land) return;
@@ -267,15 +265,6 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     const countryLift = (iso: string) => (zoomedIn && hasProvinces(iso) ? SUNK_LIFT : shownCountry(iso) ? UNLOCKED_LIFT : 0);
     for (const c of COUNTRIES) land.countries.setLift(c.iso, countryLift(c.iso));
     for (const p of PROVINCES) land.provinces.setLift(p.id, shownProvince(p.id) ? UNLOCKED_LIFT : 0);
-    lakesRef.current?.setLift((lat, lng) => {
-      const country = land.countries.regionAt(lat, lng);
-      if (!country) return 0;
-      if (zoomedIn && hasProvinces(country.iso)) {
-        const province = land.provinces.regionAt(lat, lng);
-        return province && shownProvince(province.id) ? UNLOCKED_LIFT : 0;
-      }
-      return shownCountry(country.iso) ? UNLOCKED_LIFT : 0;
-    });
   }, [shownCountry, shownProvince]);
   applyLiftsRef.current = applyLifts;
   useEffect(applyLifts, [applyLifts, landReady]);
@@ -380,16 +369,6 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     globe.pointOfView(savedPov ?? DEFAULT_POV, 0);
     handleZoom(globe.pointOfView());
     tiltRef.current = installCameraTilt(globe);
-
-    // Lakes belong to the base globe: drawn everywhere, above countries and provinces.
-    loadLakes()
-      .then((all) => {
-        const lakes = buildAllLakes(all);
-        globe.scene().add(lakes.group);
-        lakesRef.current = lakes;
-        applyLiftsRef.current();
-      })
-      .catch((e) => console.error(e));
 
     // The default light sits fixed over the North Pole; this "sun" follows the camera from the
     // upper left instead, so every country is lit the same way.

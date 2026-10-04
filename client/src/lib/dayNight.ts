@@ -63,7 +63,7 @@ export function buildNightShade() {
       }`,
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(R * 1.0165, 128, 96), material);
-  mesh.renderOrder = 10; // after land, lakes and borders, so it shades them all
+  mesh.renderOrder = 10; // after land and borders, so it shades them all
   return {
     mesh,
     /** Move the terminator to the current time. */

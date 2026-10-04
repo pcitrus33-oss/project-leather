@@ -56,7 +56,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
 
 **Client (`client/src`)**
 - `lib/countries.ts` builds the country list at load time from `src/data/countries.json`.
-  - **Borders:** the file is the 1:50m Natural Earth borders simplified by `scripts/build-borders.mjs` to 70% of their points, with small countries (< 30,000 km²) kept whole. That loads and builds in ~1 s in the browser, which is the user's target. 1:110m isn't an option because it drops 64 small countries.
+  - **Borders:** the file is the 1:50m Natural Earth borders simplified by `scripts/build-borders.mjs` to 70% of their points, with small countries (< 30,000 km²) kept whole, written as plain `{id, name, polygons}` (no topojson at runtime). That loads and builds in ~1 s in the browser, which is the user's target. 1:110m isn't an option because it drops 64 small countries.
   - Countries are keyed by **ISO alpha-3** (via `i18n-iso-countries` numeric→alpha3). The `SPECIAL` map fixes shapes with missing or duplicate codes, e.g. Kosovo, and Ashmore & Cartier sharing Australia's id. Other code-less shapes get an `X-…` key.
   - Bubble position = centroid of the country's largest polygon.
 - `components/Globe.tsx` wraps `react-globe.gl` (three.js). Non-obvious points:
@@ -66,11 +66,10 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
       - locked land at ~0.006
       - unlocked land raised by `UNLOCKED_LIFT` to ~0.014
       - USA/CAN/CHN's own country shape sunk (`SUNK_LIFT`) while their provinces show
-      - lakes, lifted per vertex with the land under them
     - **Depth precision:** globe.gl's camera near plane (0.05) left ~0.02-unit depth resolution, so layers 0.04 apart z-fought (white speckles through gray provinces, unshaded patches under the night shell). `handleReady` sets `near = 1` (the camera never gets closer than 25 units). Keep stacked layers at least ~0.002 apart.
     - **Hover:** a `pointermove` listener on the canvas, using `globe.toGlobeCoords` then `targetAt` (country, plus province when zoomed in). The tooltip is our own `.globe-tip-floating` div.
     - **Tooltip refresh:** `refreshHoverRef` re-reads the target at the last pointer position when the data loads or the province zoom threshold is crossed, so the tooltip is never stale.
-    - **Clicks:** `onGlobeClick` → `targetAt`, plus `onCustomLayerClick` for clicks on lakes.
+    - **Clicks:** `onGlobeClick` → `targetAt`.
     - **Colours:** `setColor` repaints a country's vertex range.
     - **Picking:** globe.gl only raycasts its own layers, so the merged mesh doesn't block picking.
   - **`lib/sphere.ts`** holds the shared geometry helpers. Use them instead of three-conic-polygon-geometry and d3 `geoContains`, both measured as far too slow here:
@@ -89,8 +88,8 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
     - `buildNightShade` is a transparent shader shell (radius 1.0165 R, above raised land) that darkens the night side from the real subsolar point. It is lighter when zoomed in (`setZoom`) and refreshed every minute.
     - Markers carry `data-lat`/`data-lng`; `markNight` toggles `.is-night` on them, which makes them glow.
   - **Tooltip:** `.globe-tip-floating` is rendered outside `.globe-wrapper` (a fragment sibling). Inside it, globe.gl's huge marker z-indexes would cover it.
-  - **Unlocked countries are white.** **Large lakes** are part of the base globe: `lib/lakes.ts` builds one merged layer for all of them, above both country and province caps, whatever is unlocked.
-    - **Lake data:** `src/data/lakes.json` comes from `scripts/build-lakes.mjs`: Natural Earth 1:50m lakes of at least `MIN_KM2` (3,000 km²), plus any names in `ALWAYS_KEEP`. The user will name small but important lakes (e.g. the Dead Sea) to add there.
+  - **Unlocked countries are white.** **Large lakes** are holes in the land: `scripts/cut-lakes.mjs` (polygon-clipping) cuts them out of `countries.json` and `provinces.json` at build time, so the ocean shows through and raising land never covers or tears them. There is no lake layer at runtime. (A per-vertex lake layer made every province-zoom crossing freeze for ~4 s.)
+    - **Lake data:** `scripts/lakes.json` comes from `scripts/build-lakes.mjs`: Natural Earth 1:50m lakes of at least `MIN_KM2` (3,000 km²), plus any names in `ALWAYS_KEEP`. The user will name small but important lakes (e.g. the Dead Sea) to add there; rerun `build-borders.mjs` and `build-provinces.mjs` afterwards.
     - **History:** v1.2 tried NASA-elevation relief, then painted terrain (fields, rivers, mountains, shadows). The user rejected both, so don't bring that back unless asked.
     - **Lighting:** a "sun" directional light follows the camera from the upper left. The default globe.gl light was fixed over the North Pole.
   - **Map symbols** are SVG strings in `components/mapIcons.ts`.
