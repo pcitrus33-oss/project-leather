@@ -3,22 +3,17 @@ import './ThemePreview.css';
 
 /** Tiny illustration of a theme for the settings page and theme picker. */
 export default function ThemePreview({ theme }: { theme: ThemeId }) {
-  if (theme === 'airplane') {
-    return (
-      <div className="theme-preview is-airplane" aria-hidden="true">
-        {Array.from({ length: 3 }, (_, i) => (
-          <span key={i} className="tp-window">
-            <span className="tp-pane" />
-          </span>
-        ))}
-      </div>
-    );
-  }
+  // Classic: two justified rows of photos at different shapes.
   return (
-    <div className="theme-preview is-classic" aria-hidden="true">
-      {[-4, 2, -2].map((r, i) => (
-        <span key={i} className="tp-polaroid" style={{ rotate: `${r}deg` }}>
-          <span className="tp-photo" />
+    <div className={`theme-preview is-${theme}`} aria-hidden="true">
+      {[
+        [3, 2, 4],
+        [2, 4, 3],
+      ].map((row, i) => (
+        <span key={i} className="tp-row">
+          {row.map((r, j) => (
+            <span key={j} className="tp-photo" style={{ flexGrow: r }} />
+          ))}
         </span>
       ))}
     </div>

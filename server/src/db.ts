@@ -65,10 +65,25 @@ if (!columns('photos').includes('province')) {
   `);
 }
 
+// v2.4: a longer text ("story") per photo, shown in the photo's close-up view.
+if (!columns('photos').includes('story')) {
+  db.exec(`ALTER TABLE photos ADD COLUMN story TEXT NOT NULL DEFAULT ''`);
+}
+
 /** Page themes a country can use; keep in sync with client/src/lib/themes.ts. */
-export const THEME_IDS = ['classic', 'airplane'] as const;
+export const THEME_IDS = ['classic'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 export const isThemeId = (v: unknown): v is ThemeId => THEME_IDS.includes(v as ThemeId);
+
+// Themes that were removed (v2.4: airplane) fall back to classic.
+{
+  const known = THEME_IDS.map((t) => `'${t}'`).join(', ');
+  db.exec(`
+    UPDATE countries SET theme = 'classic' WHERE theme NOT IN (${known});
+    UPDATE provinces SET theme = 'classic' WHERE theme NOT IN (${known});
+    DELETE FROM settings WHERE key = 'default_theme' AND value NOT IN (${known});
+  `);
+}
 
 function getSetting(key: string): string | undefined {
   return (db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined)?.value;
@@ -104,6 +119,7 @@ export interface PhotoRow {
   width: number;
   height: number;
   caption: string;
+  story: string;
   sort_order: number;
   created_at: string;
   lat: number | null;

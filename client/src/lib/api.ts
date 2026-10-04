@@ -32,6 +32,8 @@ export interface Photo {
   width: number;
   height: number;
   caption: string;
+  /** Longer text (a little blog), shown only in the photo's close-up view. */
+  story: string;
   thumbUrl: string;
   webUrl: string;
   originalUrl: string;
@@ -112,6 +114,8 @@ export const api = {
     request<{ coverId: string }>(`/api/countries/${iso}/cover`, json('PUT', { photoId, province })),
 
   setCaption: (id: string, caption: string) => request<{ ok: true }>(`/api/photos/${id}`, json('PATCH', { caption })),
+
+  setText: (id: string, text: { caption: string; story: string }) => request<{ ok: true }>(`/api/photos/${id}`, json('PATCH', text)),
 
   setLocation: (id: string, location: Location | null) =>
     request<{ ok: true }>(`/api/photos/${id}`, json('PATCH', { location })),

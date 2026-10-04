@@ -23,6 +23,7 @@ function toPhoto(row: PhotoRow) {
     width: row.width,
     height: row.height,
     caption: row.caption,
+    story: row.story,
     thumbUrl: `/uploads/thumb/${row.id}.jpg`,
     webUrl: `/uploads/web/${row.id}.jpg`,
     originalUrl: `/uploads/original/${row.id}${row.original_ext}`,
@@ -366,7 +367,7 @@ api.put('/settings', (req, res) => {
   res.json(settings());
 });
 
-/** Update a photo's caption, location (null removes it) and/or province (moves it). */
+/** Update a photo's caption, story, location (null removes it) and/or province (moves it). */
 api.patch('/photos/:id', (req, res) => {
   const id = String(req.params.id);
   const row = db.prepare('SELECT * FROM photos WHERE id = ?').get(id) as unknown as PhotoRow | undefined;
@@ -374,14 +375,16 @@ api.patch('/photos/:id', (req, res) => {
     res.status(404).json({ error: 'Photo not found' });
     return;
   }
-  const { caption, province } = req.body ?? {};
+  const { caption, story, province } = req.body ?? {};
   const location = parseLocation(req.body?.location);
   if (caption !== undefined && (typeof caption !== 'string' || caption.length > 500)) throw new BadRequest('Bad caption');
+  if (story !== undefined && (typeof story !== 'string' || story.length > 20000)) throw new BadRequest('Bad story');
   if (province !== undefined && !provinceBelongsTo(String(province), row.iso)) throw new BadRequest(`${province} is not a province of ${row.iso}`);
-  if (caption === undefined && location === undefined && province === undefined) throw new BadRequest('Nothing to update');
+  if (caption === undefined && story === undefined && location === undefined && province === undefined) throw new BadRequest('Nothing to update');
 
   const moved = transaction(() => {
     if (typeof caption === 'string') db.prepare('UPDATE photos SET caption = ? WHERE id = ?').run(caption.trim(), id);
+    if (typeof story === 'string') db.prepare('UPDATE photos SET story = ? WHERE id = ?').run(story.trim(), id);
     if (location !== undefined) {
       db.prepare('UPDATE photos SET lat = ?, lng = ?, place = ?, place_kind = ? WHERE id = ?').run(
         location?.lat ?? null, location?.lng ?? null, location?.name ?? null, location?.kind ?? null, id,
