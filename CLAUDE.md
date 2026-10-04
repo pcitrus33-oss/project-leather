@@ -61,8 +61,15 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
   - Bubble position = centroid of the country's largest polygon.
 - `components/Globe.tsx` wraps `react-globe.gl` (three.js). Non-obvious points:
   - **Countries are NOT a globe.gl polygon layer.** `lib/landMesh.ts` merges regions into one mesh plus one `LineSegments` of borders, added via `globe.scene()`. As separate polygons the 1,616 country pieces were ~4,800 draw calls and ~10 fps on the user's Intel Iris Xe; merged it's ~140 fps.
-    - **Two meshes:** countries at altitude 0.007, and provinces (USA/CAN/CHN) at 0.0074. The province mesh is shown only below `PROVINCE_ALTITUDE` (toggled in `handleZoom`).
+    - **Two meshes:** countries and provinces (USA/CAN/CHN). The province mesh is shown only below `PROVINCE_ALTITUDE` (toggled in `handleZoom`).
+    - **Heights via `lift`:** every vertex has a `lift` attribute that a shader patch (`withLift`) applies on the GPU. `setLift` raises or sinks a region instantly, with no rebuild. `applyLifts` sets:
+      - locked land at ~0.006
+      - unlocked land raised by `UNLOCKED_LIFT` to ~0.014
+      - USA/CAN/CHN's own country shape sunk (`SUNK_LIFT`) while their provinces show
+      - lakes, lifted per vertex with the land under them
+    - **Depth precision:** globe.gl's camera near plane (0.05) left ~0.02-unit depth resolution, so layers 0.04 apart z-fought (white speckles through gray provinces, unshaded patches under the night shell). `handleReady` sets `near = 1` (the camera never gets closer than 25 units). Keep stacked layers at least ~0.002 apart.
     - **Hover:** a `pointermove` listener on the canvas, using `globe.toGlobeCoords` then `targetAt` (country, plus province when zoomed in). The tooltip is our own `.globe-tip-floating` div.
+    - **Tooltip refresh:** `refreshHoverRef` re-reads the target at the last pointer position when the data loads or the province zoom threshold is crossed, so the tooltip is never stale.
     - **Clicks:** `onGlobeClick` → `targetAt`, plus `onCustomLayerClick` for clicks on lakes.
     - **Colours:** `setColor` repaints a country's vertex range.
     - **Picking:** globe.gl only raycasts its own layers, so the merged mesh doesn't block picking.
@@ -79,7 +86,7 @@ On this Windows machine, Node may be missing from the Bash tool's PATH. Prefix c
     - If something else moved the camera in between (a `pointOfView` fly-to), it isn't undone.
   - **Clouds:** a plain three.js group added via `globe.scene()`, faded out by `cloudOpacity` as the camera comes down to their height.
   - **Day/Night view** (`lib/dayNight.ts`, `view` prop):
-    - `buildNightShade` is a transparent shader shell just above the land that darkens the night side from the real subsolar point. It is lighter when zoomed in (`setZoom`) and refreshed every minute.
+    - `buildNightShade` is a transparent shader shell (radius 1.0165 R, above raised land) that darkens the night side from the real subsolar point. It is lighter when zoomed in (`setZoom`) and refreshed every minute.
     - Markers carry `data-lat`/`data-lng`; `markNight` toggles `.is-night` on them, which makes them glow.
   - **Tooltip:** `.globe-tip-floating` is rendered outside `.globe-wrapper` (a fragment sibling). Inside it, globe.gl's huge marker z-indexes would cover it.
   - **Unlocked countries are white.** **Large lakes** are part of the base globe: `lib/lakes.ts` builds one merged layer for all of them, above both country and province caps, whatever is unlocked.
