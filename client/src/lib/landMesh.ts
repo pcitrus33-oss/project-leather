@@ -1,7 +1,26 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
-import { featureTest, polygonSurface, toVector } from './sphere';
+import { featureTest, polygonSurface, R, toVector } from './sphere';
+
+/**
+ * Lets a material raise or sink vertices by a per-vertex `lift` attribute (extra altitude, as a fraction
+ * of the globe radius), on the GPU. Only vertices above the globe surface move, so a region's top and
+ * the upper edge of its sides rise while the sides' bottom stays on the ground.
+ */
+export function withLift<M extends THREE.Material>(material: M): M {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float lift;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        float liftR = length(transformed);
+        if (liftR > ${R.toFixed(1)} * 1.0001) transformed *= (liftR + lift * ${R.toFixed(1)}) / liftR;`,
+      );
+  };
+  return material;
+}
 
 /** Anything drawn as a flat shape on the globe: a country or a province. */
 export interface Region {
@@ -18,17 +37,18 @@ export interface LandMesh<T extends Region> {
   object: THREE.Group;
   /** Recolour one region's top and sides. */
   setColor: (key: string, top: THREE.ColorRepresentation, side: THREE.ColorRepresentation) => void;
+  /** Raise (or sink, if negative) one region and its borders by this much altitude. */
+  setLift: (key: string, lift: number) => void;
   /** The region at a point, or null. */
   regionAt: (lat: number, lng: number) => T | null;
 }
 
 /**
- * @param alt height of the flat tops (fraction of the globe radius); borders sit just above.
- * Countries use 0.007; provinces sit a hair higher so they cover their country when shown.
+ * @param alt height of the flat tops when not lifted (fraction of the globe radius); borders sit just above.
  */
 export function buildLandMesh<T extends Region>(regions: T[], alt: number, borderColor = '#2b3a67'): LandMesh<T> {
   const pieces: THREE.BufferGeometry[] = [];
-  const ranges = new Map<string, { top: [number, number][]; side: [number, number][] }>();
+  const ranges = new Map<string, { top: [number, number][]; side: [number, number][]; border: [number, number] }>();
   const borders: number[] = [];
   let vertexCount = 0;
   const v = new THREE.Vector3();
@@ -43,7 +63,7 @@ export function buildLandMesh<T extends Region>(regions: T[], alt: number, borde
 
   for (const region of regions) {
     const g = region.feature.geometry;
-    const range = { top: [] as [number, number][], side: [] as [number, number][] };
+    const range = { top: [] as [number, number][], side: [] as [number, number][], border: [borders.length / 3, 0] as [number, number] };
     ranges.set(region.key, range);
     for (const coords of g.type === 'Polygon' ? [g.coordinates] : g.coordinates) {
       // Edges up to 3° keep the flat top within ~0.03 units of the curved surface.
@@ -59,16 +79,21 @@ export function buildLandMesh<T extends Region>(regions: T[], alt: number, borde
         }
       }
     }
+    range.border[1] = borders.length / 3 - range.border[0];
   }
 
   const merged = mergeGeometries(pieces)!;
   pieces.forEach((p) => p.dispose());
   const colors = merged.attributes.color as THREE.BufferAttribute;
-  const land = new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  const lifts = new THREE.Float32BufferAttribute(new Float32Array(vertexCount), 1);
+  merged.setAttribute('lift', lifts);
+  const land = new THREE.Mesh(merged, withLift(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
 
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(borders, 3));
-  const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: borderColor }));
+  const lineLifts = new THREE.Float32BufferAttribute(new Float32Array(borders.length / 3), 1);
+  lineGeo.setAttribute('lift', lineLifts);
+  const lines = new THREE.LineSegments(lineGeo, withLift(new THREE.LineBasicMaterial({ color: borderColor })));
 
   const object = new THREE.Group();
   object.add(land, lines);
@@ -93,6 +118,14 @@ export function buildLandMesh<T extends Region>(regions: T[], alt: number, borde
       paint(range.top, top);
       paint(range.side, side);
       colors.needsUpdate = true;
+    },
+    setLift(key, lift) {
+      const range = ranges.get(key);
+      if (!range) return;
+      for (const [start, count] of [...range.top, ...range.side]) for (let i = start; i < start + count; i++) lifts.setX(i, lift);
+      for (let i = range.border[0]; i < range.border[0] + range.border[1]; i++) lineLifts.setX(i, lift);
+      lifts.needsUpdate = true;
+      lineLifts.needsUpdate = true;
     },
     regionAt(lat, lng) {
       for (const t of tests) {

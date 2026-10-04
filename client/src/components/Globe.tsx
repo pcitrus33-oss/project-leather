@@ -46,8 +46,14 @@ const PROVINCE_ALTITUDE = 1.6;
 // Capital names appear first; other city names only once zoomed closer, to limit overlap.
 const CAPITAL_NAMES_ALTITUDE = 1.3;
 const CITY_NAMES_ALTITUDE = 0.7;
-const COUNTRY_ALT = 0.007;
-const PROVINCE_ALT = 0.0074;
+// Land heights (fractions of the radius). Locked land sits low and unlocked land is raised well above it;
+// layers are kept far enough apart that the depth buffer never confuses them (that caused white speckles).
+const COUNTRY_ALT = 0.006;
+const PROVINCE_ALT = 0.0063;
+/** Extra height for unlocked countries/provinces: they stand at ~0.014. */
+const UNLOCKED_LIFT = 0.008;
+/** USA/Canada/China's country shape sinks out of the way while their provinces are shown. */
+const SUNK_LIFT = -0.0055;
 
 type CityMarker = {
   kind: 'city';
@@ -93,7 +99,9 @@ const ALL_CITIES: CityMarker[] = (() => {
 
 /** Photo bubbles sit on top of a short stem rising straight out of their spot. */
 const STEM_ALT = 0.035;
-const markerAltitude = (d: object) => ((d as Marker).kind === 'bubble' ? STEM_ALT : 0.008);
+/** Cities and symbols stand on top of raised (unlocked) land. */
+const SYMBOL_ALT = 0.015;
+const markerAltitude = (d: object) => ((d as Marker).kind === 'bubble' ? STEM_ALT : SYMBOL_ALT);
 
 /** At most this many photo bubbles on the globe: half the most recent places, half picked at random. */
 const MAX_BUBBLES = 20;
@@ -197,6 +205,8 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
   const zoomedInRef = useRef(false);
   const nightRef = useRef<ReturnType<typeof buildNightShade> | null>(null);
   const cloudsRef = useRef<ReturnType<typeof makeClouds> | null>(null);
+  const lakesRef = useRef<ReturnType<typeof buildAllLakes> | null>(null);
+  const applyLiftsRef = useRef<() => void>(() => {});
   const sunRef = useRef(sunDirection());
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -229,6 +239,9 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
   );
   const tooltipRef = useRef(tooltip);
   tooltipRef.current = tooltip;
+  /** Re-reads what's under the pointer; set by the hover effect, also run when data or zoom change. */
+  const refreshHoverRef = useRef<() => void>(() => {});
+  useEffect(() => refreshHoverRef.current(), [tooltip]);
 
   // Countries, and the provinces of USA/Canada/China, each as one merged mesh (see lib/landMesh.ts).
   const landRef = useRef<{ countries: LandMesh<CountryRegion>; provinces: LandMesh<ProvinceRegion> } | null>(null);
@@ -245,6 +258,27 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     for (const c of COUNTRIES) paint(land.countries, c.iso, shownCountry(c.iso), hovered === `c:${c.iso}`);
     for (const p of PROVINCES) paint(land.provinces, p.id, shownProvince(p.id), hovered === `p:${p.id}`);
   }, [landReady, shownCountry, shownProvince, hovered]);
+
+  // Raise unlocked land (and the lakes on it); sink province countries' own shape while provinces show.
+  const applyLifts = useCallback(() => {
+    const land = landRef.current;
+    if (!land) return;
+    const zoomedIn = zoomedInRef.current;
+    const countryLift = (iso: string) => (zoomedIn && hasProvinces(iso) ? SUNK_LIFT : shownCountry(iso) ? UNLOCKED_LIFT : 0);
+    for (const c of COUNTRIES) land.countries.setLift(c.iso, countryLift(c.iso));
+    for (const p of PROVINCES) land.provinces.setLift(p.id, shownProvince(p.id) ? UNLOCKED_LIFT : 0);
+    lakesRef.current?.setLift((lat, lng) => {
+      const country = land.countries.regionAt(lat, lng);
+      if (!country) return 0;
+      if (zoomedIn && hasProvinces(country.iso)) {
+        const province = land.provinces.regionAt(lat, lng);
+        return province && shownProvince(province.id) ? UNLOCKED_LIFT : 0;
+      }
+      return shownCountry(country.iso) ? UNLOCKED_LIFT : 0;
+    });
+  }, [shownCountry, shownProvince]);
+  applyLiftsRef.current = applyLifts;
+  useEffect(applyLifts, [applyLifts, landReady]);
 
   /** Country (and, when zoomed in on a province country, province) at a point. */
   const targetAt = useCallback((lat: number, lng: number): GlobeTarget | null => {
@@ -300,8 +334,13 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     const cl = wrapperRef.current?.classList;
     cl?.toggle('show-capital-names', pov.altitude < CAPITAL_NAMES_ALTITUDE);
     cl?.toggle('show-city-names', pov.altitude < CITY_NAMES_ALTITUDE);
-    zoomedInRef.current = pov.altitude < PROVINCE_ALTITUDE;
-    if (landRef.current) landRef.current.provinces.object.visible = zoomedInRef.current;
+    const zoomedIn = pov.altitude < PROVINCE_ALTITUDE;
+    if (zoomedIn !== zoomedInRef.current) {
+      zoomedInRef.current = zoomedIn;
+      if (landRef.current) landRef.current.provinces.object.visible = zoomedIn;
+      applyLiftsRef.current();
+      refreshHoverRef.current(); // the pointer may now be over a province instead of its country
+    }
     nightRef.current?.setZoom(pov.altitude);
     const clouds = cloudsRef.current;
     if (clouds) {
@@ -314,6 +353,11 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     const globe = globeRef.current;
     if (!globe) return;
     const controls = globe.controls();
+    // The camera never comes closer than 25 units to the surface, so a near plane of 1 (globe.gl uses
+    // 0.05) gives ~20x the depth precision: thin stacked layers stop flickering through each other.
+    const cam = globe.camera() as THREE.PerspectiveCamera;
+    cam.near = 1;
+    cam.updateProjectionMatrix();
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.45;
     controls.enableDamping = true;
@@ -324,6 +368,7 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     const countries = buildLandMesh(COUNTRIES.map((c) => ({ ...c, key: c.iso })), COUNTRY_ALT);
     // Province borders are drawn softer than country borders.
     const provinces = buildLandMesh(PROVINCES.map((p) => ({ ...p, key: p.id })), PROVINCE_ALT, '#6b779c');
+    provinces.object.visible = false; // shown by handleZoom once zoomed in
     globe.scene().add(countries.object, provinces.object);
     landRef.current = { countries, provinces };
     const night = buildNightShade();
@@ -338,7 +383,12 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
 
     // Lakes belong to the base globe: drawn everywhere, above countries and provinces.
     loadLakes()
-      .then((all) => globe.scene().add(buildAllLakes(all)))
+      .then((all) => {
+        const lakes = buildAllLakes(all);
+        globe.scene().add(lakes.group);
+        lakesRef.current = lakes;
+        applyLiftsRef.current();
+      })
       .catch((e) => console.error(e));
 
     // The default light sits fixed over the North Pole; this "sun" follows the camera from the
@@ -386,25 +436,34 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
     const canvas = globe.renderer().domElement;
     let frame = 0;
     let last: string | null = null;
+    let lastHtml = '';
+    let pointer: PointerEvent | null = null;
+    const refresh = () => {
+      const e = pointer;
+      if (!e) return;
+      const at = globe.toGlobeCoords(e.offsetX, e.offsetY);
+      const t = at ? targetAt(at.lat, at.lng) : null;
+      const key = t ? (t.province ? `p:${t.province.id}` : `c:${t.country.iso}`) : null;
+      if (key !== last) {
+        last = key;
+        setHovered(key);
+        if (t) pauseSpin();
+        canvas.style.cursor = t ? 'pointer' : '';
+      }
+      const html = t ? tooltipRef.current(t) : '';
+      if (html !== lastHtml) tip.innerHTML = lastHtml = html;
+      tip.style.display = t ? 'block' : 'none';
+      tip.style.transform = `translate(${e.clientX + 16}px, ${e.clientY + 16}px)`;
+    };
+    refreshHoverRef.current = refresh;
     const onMove = (e: PointerEvent) => {
+      pointer = e;
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const at = globe.toGlobeCoords(e.offsetX, e.offsetY);
-        const t = at ? targetAt(at.lat, at.lng) : null;
-        const key = t ? (t.province ? `p:${t.province.id}` : `c:${t.country.iso}`) : null;
-        if (key !== last) {
-          last = key;
-          setHovered(key);
-          if (t) pauseSpin();
-          canvas.style.cursor = t ? 'pointer' : '';
-          tip.innerHTML = t ? tooltipRef.current(t) : '';
-        }
-        tip.style.display = t ? 'block' : 'none';
-        tip.style.transform = `translate(${e.clientX + 16}px, ${e.clientY + 16}px)`;
-      });
+      frame = requestAnimationFrame(refresh);
     };
     const onLeave = () => {
       cancelAnimationFrame(frame);
+      pointer = null;
       last = null;
       setHovered(null);
       tip.style.display = 'none';

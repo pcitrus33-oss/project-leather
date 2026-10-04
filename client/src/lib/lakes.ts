@@ -1,13 +1,15 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { withLift } from './landMesh';
 import { polygonSurface, toVector } from './sphere';
 
 /**
- * Lakes are part of the base globe, drawn for every country whether unlocked or not. They sit above
- * both the country caps (0.007) and the province caps (0.0074), so provinces never hide them.
+ * Lakes are part of the base globe, drawn for every country whether unlocked or not. They sit just
+ * above the low (locked) land, and each vertex is lifted with the land under it (see setLift), so
+ * lakes stay on top of raised unlocked regions too.
  */
-const LAKE_ALT = 0.0078;
-const SHORE_ALT = 0.008;
+const LAKE_ALT = 0.0068;
+const SHORE_ALT = 0.007;
 const SHORE_WIDTH = 0.1;
 
 type Lake = { name: string; polygons: number[][][][] };
@@ -18,7 +20,7 @@ export function loadLakes(): Promise<Lake[]> {
 }
 
 /** Every lake as one water mesh plus one darker shoreline mesh. */
-export function buildAllLakes(lakes: Lake[]): THREE.Group {
+export function buildAllLakes(lakes: Lake[]) {
   const fills: THREE.BufferGeometry[] = [];
   const shore = { positions: [] as number[], indices: [] as number[] };
   for (const lake of lakes) {
@@ -28,13 +30,35 @@ export function buildAllLakes(lakes: Lake[]): THREE.Group {
       for (const ring of coords) ribbon(ring.map(([lng, lat]) => toVector(lat, lng, SHORE_ALT)), shore.positions, shore.indices);
     }
   }
+  const water = mergeGeometries(fills)!;
+  const shoreGeo = new THREE.BufferGeometry();
+  shoreGeo.setAttribute('position', new THREE.Float32BufferAttribute(shore.positions, 3));
+  shoreGeo.setIndex(shore.indices);
+  for (const geo of [water, shoreGeo]) geo.setAttribute('lift', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count), 1));
+
   const group = new THREE.Group();
-  group.add(new THREE.Mesh(mergeGeometries(fills)!, new THREE.MeshLambertMaterial({ color: '#7fcff5', side: THREE.DoubleSide })));
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(shore.positions, 3));
-  geo.setIndex(shore.indices);
-  group.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#3b86c4', side: THREE.DoubleSide })));
-  return group;
+  group.add(new THREE.Mesh(water, withLift(new THREE.MeshLambertMaterial({ color: '#7fcff5', side: THREE.DoubleSide }))));
+  group.add(new THREE.Mesh(shoreGeo, withLift(new THREE.MeshBasicMaterial({ color: '#3b86c4', side: THREE.DoubleSide }))));
+
+  const v = new THREE.Vector3();
+  return {
+    group,
+    /** Lifts every lake vertex by the lift of the land at that point. */
+    setLift(liftAt: (lat: number, lng: number) => number) {
+      for (const geo of [water, shoreGeo]) {
+        const pos = geo.attributes.position;
+        const lift = geo.attributes.lift as THREE.BufferAttribute;
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i);
+          const lat = 90 - (Math.acos(v.y / v.length()) * 180) / Math.PI;
+          let lng = 90 - (Math.atan2(v.z, v.x) * 180) / Math.PI;
+          if (lng > 180) lng -= 360;
+          lift.setX(i, liftAt(lat, lng));
+        }
+        lift.needsUpdate = true;
+      }
+    },
+  };
 }
 
 /** A flat ribbon following a line on the globe surface. */

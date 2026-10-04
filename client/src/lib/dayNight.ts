@@ -33,7 +33,7 @@ const DARKNESS_FAR = 0.62;
 const DARKNESS_NEAR = 0.3;
 
 /**
- * A see-through shell just above the land that darkens the night side with a soft twilight edge.
+ * A see-through shell just above the (raised) land that darkens the night side with a soft twilight edge.
  * It only shades (no lighting of its own) and draws after everything below it.
  */
 export function buildNightShade() {
@@ -62,7 +62,7 @@ export function buildNightShade() {
         gl_FragColor = vec4(nightColor, night * darkness);
       }`,
   });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(R * 1.0085, 128, 96), material);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(R * 1.0165, 128, 96), material);
   mesh.renderOrder = 10; // after land, lakes and borders, so it shades them all
   return {
     mesh,
