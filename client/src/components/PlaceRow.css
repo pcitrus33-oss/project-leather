@@ -1,0 +1,50 @@
+/* One big row in a single-column list of places (province catalogue, countries sheet) */
+.place-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px 12px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.place-row:hover {
+  transform: translateY(-3px) rotate(-0.4deg);
+}
+.place-row img {
+  flex: none;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: var(--border);
+  border-radius: 16px;
+  background: #eef1f7;
+}
+.place-row-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.place-row-text b {
+  font-size: 1.5rem;
+}
+.place-row-text span {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.place-row-go {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .place-row img {
+    width: 84px;
+    height: 84px;
+  }
+  .place-row-text b {
+    font-size: 1.2rem;
+  }
+}

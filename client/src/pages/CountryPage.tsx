@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { motion } from 'motion/react';
 import Lightbox from 'yet-another-react-lightbox';
 import Captions from 'yet-another-react-lightbox/plugins/captions';
@@ -17,6 +17,8 @@ import Flag from '../components/Flag';
 import AirplaneGallery from '../components/AirplaneGallery';
 import ThemePicker from '../components/ThemePicker';
 import LocationSearch from '../components/LocationSearch';
+import SideDock from '../components/SideDock';
+import PlaceRow from '../components/PlaceRow';
 import './CountryPage.css';
 
 interface Draft {
@@ -234,35 +236,40 @@ export default function CountryPage() {
           </div>
         </div>
 
-        <div className="country-actions">
-          {draft ? (
-            <>
-              <button className="btn" onClick={cancelEditing} disabled={saving}>
-                Cancel
-              </button>
-              <button className="btn btn-mint" onClick={saveEditing} disabled={saving || !dirty}>
-                {saving ? 'Saving…' : '💾 Save'}
-              </button>
-            </>
-          ) : (
-            <>
-              {!catalogue && photos.length > 0 && <ThemePicker value={theme} onChange={changeTheme} />}
-              {!catalogue && photos.length > 0 && (
-                <button className="btn" onClick={startEditing}>
-                  ✏️ {photos.length > 1 ? 'Edit layout' : 'Edit'}
-                </button>
-              )}
-              <button className="btn btn-pink" onClick={() => setAddOpen(true)}>
-                📸 Add photos
-              </button>
-            </>
-          )}
-        </div>
       </header>
+
+      {/* Kept out while editing, so Save and Cancel are always in reach. */}
+      <SideDock pinned={!!draft} label="Page menu">
+        {draft ? (
+          <>
+            <button className="btn btn-mint" onClick={saveEditing} disabled={saving || !dirty}>
+              {saving ? 'Saving…' : '💾 Save'}
+            </button>
+            <button className="btn" onClick={cancelEditing} disabled={saving}>
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            {!catalogue && photos.length > 0 && <ThemePicker value={theme} onChange={changeTheme} />}
+            {!catalogue && photos.length > 0 && (
+              <button className="btn" onClick={startEditing}>
+                ✏️ {photos.length > 1 ? 'Edit layout' : 'Edit'}
+              </button>
+            )}
+            <button className="btn btn-pink" onClick={() => setAddOpen(true)}>
+              📸 Add photos
+            </button>
+            <Link to="/settings" className="btn">
+              ⚙️ Settings
+            </Link>
+          </>
+        )}
+      </SideDock>
 
       {draft && (
         <div className="edit-banner">
-          Drag photos to rearrange · ⭐ picks the globe cover · 📍 tags where it was taken · type to caption. Hit <b>Save</b> when you’re happy!
+          Drag photos to rearrange · ⭐ picks the globe cover · 📍 tags where it was taken · type to caption. Hit <b>Save</b> on the right when you’re happy!
         </div>
       )}
 
@@ -367,18 +374,12 @@ function ProvinceCatalogue({ iso, provinces, onOpen }: { iso: string; provinces:
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: Math.min(i * 0.05, 0.5), type: 'spring', stiffness: 300, damping: 24 }}
         >
-          <button className="province-row card" onClick={() => onOpen(p.id)}>
-            <img src={p.coverUrl} alt="" loading="lazy" />
-            <span className="province-row-text">
-              <b>{p.info!.name}</b>
-              <span>
-                {p.info!.type} · {p.count} photo{p.count === 1 ? '' : 's'}
-              </span>
-            </span>
-            <span className="province-row-go" aria-hidden="true">
-              →
-            </span>
-          </button>
+          <PlaceRow
+            imageUrl={p.coverUrl}
+            title={p.info!.name}
+            sub={`${p.info!.type} · ${p.count} photo${p.count === 1 ? '' : 's'}`}
+            onClick={() => onOpen(p.id)}
+          />
         </motion.li>
       ))}
       {rows.length > 0 && (

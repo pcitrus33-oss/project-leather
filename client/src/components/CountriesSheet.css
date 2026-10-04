@@ -1,0 +1,107 @@
+/* Bottom tab that pulls up the countries list */
+.countries-tab {
+  position: fixed;
+  z-index: 8;
+  bottom: 0;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 28px 12px;
+  border: var(--border);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  background: var(--yellow);
+  box-shadow: var(--shadow);
+  font-family: var(--font);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: none; /* lets a swipe up open it */
+}
+.countries-grip {
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--ink);
+  opacity: 0.5;
+}
+
+/* The pulled-up list stops short of the top, so the globe peeks out and it's clear it can go back down. */
+.countries-sheet {
+  position: fixed;
+  z-index: 9;
+  top: 88px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: min(760px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-bottom: none;
+  border-radius: 28px 28px 0 0;
+  overflow: hidden;
+}
+.countries-sheet-handle {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 6px;
+  border: none;
+  background: none;
+  font-family: var(--font);
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: grab;
+  touch-action: none;
+}
+.countries-sheet-head {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 4px 24px 14px;
+}
+.countries-sheet-head h2 {
+  margin: 0;
+  flex: 1;
+  white-space: nowrap;
+}
+.countries-sheet-head .input {
+  flex: 1;
+  min-width: 200px;
+}
+.countries-sheet-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 6px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.countries-sheet-empty {
+  text-align: center;
+  color: var(--ink-soft);
+  padding: 16px;
+}
+
+@media (max-width: 600px) {
+  .countries-sheet {
+    top: 72px;
+  }
+  .countries-sheet-head,
+  .countries-sheet-list {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import Globe, { type GlobeTarget } from '../components/Globe';
 import UnlockModal from '../components/UnlockModal';
@@ -7,6 +7,8 @@ import { api, type GlobeView, type UnlockedCountry, type UploadResult } from '..
 import { celebrate } from '../lib/celebrate';
 import Flag from '../components/Flag';
 import PlaneIcon from '../components/PlaneIcon';
+import SideDock from '../components/SideDock';
+import CountriesSheet from '../components/CountriesSheet';
 import { DEV, useRevealAll } from '../lib/devMode';
 import './GlobePage.css';
 
@@ -19,6 +21,10 @@ export default function GlobePage() {
   const [lockedPopup, setLockedPopup] = useState<{ target: GlobeTarget; x: number; y: number } | null>(null);
   const revealAll = useRevealAll();
   const [view, setView] = useState<GlobeView>('day');
+  // In the URL (replacing, not pushing), so Back from a country opened from the list returns to the list.
+  const [params, setParams] = useSearchParams();
+  const listOpen = params.has('countries');
+  const setListOpen = useCallback((open: boolean) => setParams(open ? { countries: '' } : {}, { replace: true }), [setParams]);
 
   useEffect(() => {
     api
@@ -79,14 +85,30 @@ export default function GlobePage() {
         </motion.h1>
       </header>
 
-      <Dock
-        // Keep it out while there's nothing on the globe yet, so "Unlock a country" is easy to find.
-        pinned={loaded && unlocked.length === 0}
-        countries={unlocked.length}
-        photos={photoTotal}
-        onUnlock={() => setModal({ open: true })}
-        revealAll={revealAll}
-      />
+      {/* Kept out while there's nothing on the globe yet, so "Unlock a country" is easy to find. */}
+      <SideDock pinned={loaded && unlocked.length === 0} label="Globe menu">
+        <div className="globe-dock-stat">
+          <b>{unlocked.length}</b>
+          <span>🗺️ {unlocked.length === 1 ? 'Country' : 'Countries'} visited</span>
+        </div>
+        <div className="globe-dock-stat">
+          <b>{photoTotal}</b>
+          <span>📸 {photoTotal === 1 ? 'Photo' : 'Photos'} uploaded</span>
+        </div>
+        <button className="btn btn-pink" onClick={() => setModal({ open: true })}>
+          🔓 Unlock a country
+        </button>
+        <Link to="/settings" className="btn">
+          ⚙️ Settings
+        </Link>
+        {DEV && (
+          <Link to="/settings" className="chip dev-chip" title="Developer site: sandbox data, see Settings for tools">
+            🛠️ Developer{revealAll ? ' · all shown' : ''}
+          </Link>
+        )}
+      </SideDock>
+
+      <CountriesSheet unlocked={unlocked} open={listOpen} onOpenChange={setListOpen} />
 
       {loadError && <div className="globe-alert chip">😿 Can’t reach the photo server — is it running?</div>}
 
@@ -146,78 +168,5 @@ export default function GlobePage() {
         onUploaded={handleUploaded}
       />
     </div>
-  );
-}
-
-const DOCK_HIDE_DELAY_MS = 700;
-
-/**
- * The globe's menu, like a taskbar standing on the right edge: tucked away off-screen with only a tab
- * showing, and sliding out when the pointer comes near (or the tab is clicked, for touch screens).
- */
-function Dock({
-  pinned,
-  countries,
-  photos,
-  onUnlock,
-  revealAll,
-}: {
-  pinned: boolean;
-  countries: number;
-  photos: number;
-  onUnlock: () => void;
-  revealAll: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const hideTimer = useRef<number | undefined>(undefined);
-  const show = () => {
-    window.clearTimeout(hideTimer.current);
-    setOpen(true);
-  };
-  const hideSoon = () => {
-    window.clearTimeout(hideTimer.current);
-    hideTimer.current = window.setTimeout(() => setOpen(false), DOCK_HIDE_DELAY_MS);
-  };
-  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
-  const isOpen = open || pinned;
-
-  return (
-    <nav
-      className={`globe-dock ${isOpen ? 'is-open' : ''}`}
-      onPointerEnter={show}
-      onPointerLeave={hideSoon}
-      onPointerDown={(e) => e.stopPropagation()}
-      aria-label="Globe menu"
-    >
-      <button
-        className="globe-dock-tab"
-        onClick={() => (isOpen ? setOpen(false) : show())}
-        aria-expanded={isOpen}
-        aria-label={isOpen ? 'Hide menu' : 'Show menu'}
-      >
-        {isOpen ? '›' : '‹'}
-      </button>
-      <div className="globe-dock-panel card">
-        <div className="globe-dock-stat">
-          <b>{countries}</b>
-          <span>🗺️ {countries === 1 ? 'Country' : 'Countries'} visited</span>
-        </div>
-        <div className="globe-dock-stat">
-          <b>{photos}</b>
-          <span>📸 {photos === 1 ? 'Photo' : 'Photos'} uploaded</span>
-        </div>
-        <button className="btn btn-pink" onClick={onUnlock}>
-          🔓 Unlock a country
-        </button>
-        <Link to="/settings" className="btn">
-          ⚙️ Settings
-        </Link>
-        {DEV && (
-          <Link to="/settings" className="chip dev-chip" title="Developer site: sandbox data, see Settings for tools">
-            🛠️ Developer{revealAll ? ' · all shown' : ''}
-          </Link>
-        )}
-      </div>
-    </nav>
   );
 }
