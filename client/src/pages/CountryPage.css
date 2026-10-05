@@ -45,6 +45,13 @@
   align-items: center;
   gap: 10px;
 }
+.country-territories a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.country-territories a:hover {
+  color: var(--accent);
+}
 
 .edit-banner {
   margin-bottom: 28px;

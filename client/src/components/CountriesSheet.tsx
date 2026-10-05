@@ -33,9 +33,10 @@ export default function CountriesSheet({
       unlocked
         .flatMap((u) => {
           const country = getCountry(u.iso);
-          return country ? [{ ...u, country }] : [];
+          return country ? [{ ...u, country, parent: getCountry(country.parent)?.name }] : [];
         })
-        .sort((a, b) => a.country.name.localeCompare(b.country.name)),
+        // Territories sit right after their country: France, then French Guiana.
+        .sort((a, b) => (a.parent ?? a.country.name).localeCompare(b.parent ?? b.country.name) || +!!a.parent - +!!b.parent || a.country.name.localeCompare(b.country.name)),
     [unlocked],
   );
   const q = query.trim().toLowerCase();
@@ -117,9 +118,10 @@ export default function CountriesSheet({
                       </>
                     }
                     sub={
-                      hasProvinces(r.iso) && r.provinces.length
+                      (r.parent ? `${r.parent} · ` : '') +
+                      (hasProvinces(r.iso) && r.provinces.length
                         ? `${plural(r.count, 'photo')} · ${plural(r.provinces.length, provinceWord(r.iso))}`
-                        : plural(r.count, 'photo')
+                        : plural(r.count, 'photo'))
                     }
                     onClick={() => navigate(`/country/${r.iso}`)}
                   />

@@ -10,6 +10,8 @@ export interface Country {
   name: string;
   /** ISO alpha-2 code, used for the flag image. */
   alpha2?: string;
+  /** For an overseas territory split out of its country (French Guiana), that country's iso. */
+  parent?: string;
   feature: Feature<Polygon | MultiPolygon>;
   /** Where the photo bubble sits: the centre of the country's largest landmass. */
   lat: number;
@@ -35,18 +37,29 @@ function mainLandmass(f: Feature<Polygon | MultiPolygon>): Feature<Polygon> {
   return parts.reduce((a, b) => (geoArea(b) > geoArea(a) ? b : a));
 }
 
-export const COUNTRIES: Country[] = (shapes as { id: string | null; name: string; polygons: number[][][][] }[])
-  .map(({ id: rawId, name, polygons }) => {
+type Shape = { id: string | null; name: string; polygons: number[][][][]; iso?: string; alpha2?: string; parent?: string };
+
+export const COUNTRIES: Country[] = (shapes as Shape[])
+  .map(({ id: rawId, name, polygons, ...territory }) => {
     const f: Feature<MultiPolygon> = { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: polygons } };
     const id = rawId ?? undefined;
     const special = SPECIAL[name];
-    const iso = special?.iso ?? (id && isoCountries.numericToAlpha3(id)) ?? `X-${name.replace(/[^A-Za-z]+/g, '-').toUpperCase()}`;
-    const alpha2 = special?.alpha2 ?? (id ? isoCountries.numericToAlpha2(id) : undefined);
+    const iso = territory.iso ?? special?.iso ?? (id && isoCountries.numericToAlpha3(id)) ?? `X-${name.replace(/[^A-Za-z]+/g, '-').toUpperCase()}`;
+    const alpha2 = territory.alpha2 ?? special?.alpha2 ?? (id ? isoCountries.numericToAlpha2(id) : undefined);
     const [lng, lat] = geoCentroid(mainLandmass(f));
-    return { iso, name, alpha2, feature: f, lat, lng };
+    return { iso, name, alpha2, parent: territory.parent, feature: f, lat, lng };
   })
   .sort((a, b) => a.name.localeCompare(b.name));
 
 const BY_ISO = new Map(COUNTRIES.map((c) => [c.iso, c]));
 
 export const getCountry = (iso: string | undefined) => (iso ? BY_ISO.get(iso) : undefined);
+
+/** Overseas territories of a country (France → French Guiana, Réunion…). */
+export const territoriesOf = (iso: string) => COUNTRIES.filter((c) => c.parent === iso);
+
+/** Country codes to search places in: a territory's own plus its parent's, as map services file some under either. */
+export function searchCodes(c: Country) {
+  const codes = [c.alpha2, getCountry(c.parent)?.alpha2].filter((a): a is string => !!a && a !== 'IC');
+  return [...new Set(codes)].join(',').toLowerCase() || undefined;
+}

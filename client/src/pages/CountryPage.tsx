@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { api, type Location, type Photo, type UnlockedProvince, type UploadResult } from '../lib/api';
-import { getCountry } from '../lib/countries';
+import { getCountry, searchCodes, territoriesOf } from '../lib/countries';
 import { getProvince, hasProvinces, provinceWord } from '../lib/provinces';
 import { celebrate } from '../lib/celebrate';
 import type { ThemeId } from '../lib/themes';
@@ -40,6 +40,8 @@ export default function CountryPage() {
   const catalogue = hasProvinces(iso) && !province;
   const scopeId = province?.id ?? null;
   const place = province ?? country;
+  const parent = getCountry(country?.parent);
+  const territories = useMemo(() => (country ? territoriesOf(country.iso) : []), [country]);
 
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [provinces, setProvinces] = useState<UnlockedProvince[]>([]);
@@ -53,6 +55,13 @@ export default function CountryPage() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [locatingId, setLocatingId] = useState<string | null>(null);
+  const [visited, setVisited] = useState<string[]>([]);
+
+  // A country with overseas territories links to the ones that have photos.
+  useEffect(() => {
+    if (territories.length) api.countries().then((list) => setVisited(list.map((u) => u.iso)), () => {});
+  }, [territories]);
+  const openTerritories = territories.filter((t) => visited.includes(t.iso));
 
   const load = useCallback(() => {
     if (!country || !validProvince) return Promise.resolve();
@@ -220,6 +229,7 @@ export default function CountryPage() {
             <Flag country={country} />
             <span>
               {province && `${province.type} · ${country.name} · `}
+              {parent && `Territory · ${parent.name} · `}
               {loading
                 ? 'Loading…'
                 : catalogue
@@ -227,12 +237,28 @@ export default function CountryPage() {
                   : `${photos.length} photo${photos.length === 1 ? '' : 's'}`}
             </span>
           </div>
+          {openTerritories.length > 0 && (
+            <div className="eyebrow country-territories">
+              Also{' '}
+              {openTerritories.map((t, i) => (
+                <span key={t.iso}>
+                  {i > 0 && ' · '}
+                  <Link to={`/country/${t.iso}`}>{t.name}</Link>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="country-header-side is-end">
           {province && (
             <button className="btn btn-quiet" onClick={() => navigate(`/country/${iso}`)}>
               ← {country.name}
+            </button>
+          )}
+          {parent && (
+            <button className="btn btn-quiet" onClick={() => navigate(`/country/${parent.iso}`)}>
+              ← {parent.name}
             </button>
           )}
         </div>
@@ -317,7 +343,7 @@ export default function CountryPage() {
             photos={photos}
             index={lightboxIndex}
             coverId={effectiveCover}
-            alpha2={country.alpha2}
+            alpha2={searchCodes(country)}
             onIndex={setLightboxIndex}
             onClose={() => setLightboxIndex(-1)}
             onChange={(next) => setPhotos((prev) => prev.map((p) => (p.id === next.id ? next : p)))}
@@ -335,7 +361,7 @@ export default function CountryPage() {
             </button>
             <h2 className="title modal-title">Where was this taken?</h2>
             <LocationSearch
-              alpha2={country.alpha2}
+              alpha2={searchCodes(country)}
               onPick={(place) => {
                 setDraft({ ...draft, locations: { ...draft.locations, [locatingId]: place } });
                 setLocatingId(null);

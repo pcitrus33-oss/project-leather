@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { territoryAt } from './territories.mjs';
 
 const require = createRequire(path.resolve('client/package.json'));
 const { feature } = require('topojson-client');
@@ -46,15 +47,22 @@ const countries = feature(topology, topology.objects.countries).features;
 const areaByIso = new Map();
 for (const f of countries) {
   const iso = f.properties.name === 'Kosovo' ? 'XKX' : f.id && isoCountries.numericToAlpha3(f.id);
-  if (iso) areaByIso.set(iso, (areaByIso.get(iso) ?? 0) + (geoArea(f) / (4 * Math.PI)) * EARTH_KM2);
+  if (!iso) continue;
+  // Far-off territories (scripts/territories.mjs) count as places of their own.
+  const polygons = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+  for (const coordinates of polygons) {
+    const key = territoryAt(iso, coordinates[0][0])?.iso ?? iso;
+    areaByIso.set(key, (areaByIso.get(key) ?? 0) + (geoArea({ type: 'Polygon', coordinates }) / (4 * Math.PI)) * EARTH_KM2);
+  }
 }
 
 const byIso = new Map();
 for (const { properties: p, geometry } of places.features) {
-  const iso =
+  const countryIso =
     NE_TO_ISO3[p.adm0_a3] ??
     (p.iso_a2 && p.iso_a2 !== '-99' && isoCountries.alpha2ToAlpha3(p.iso_a2)) ??
     p.adm0_a3;
+  const iso = territoryAt(countryIso, geometry.coordinates)?.iso ?? countryIso;
   if (!areaByIso.has(iso) || SKIP.has(iso)) continue;
   const list = byIso.get(iso) ?? [];
   list.push({

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { COUNTRIES, getCountry } from '../lib/countries';
+import { COUNTRIES, getCountry, searchCodes } from '../lib/countries';
 import { api, type Location, type UploadResult } from '../lib/api';
 import { getProvince, hasProvinces, provinceWord, provincesOf } from '../lib/provinces';
 import Flag from './Flag';
@@ -288,7 +288,7 @@ export default function UnlockModal({
                     </span>
                   ) : searchingPlace ? (
                     <LocationSearch
-                      alpha2={country.alpha2}
+                      alpha2={searchCodes(country)}
                       onPick={(place) => {
                         setLocation(place);
                         setSearchingPlace(false);

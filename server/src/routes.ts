@@ -416,7 +416,7 @@ api.get('/geocode', async (req, res) => {
 
   const url = new URL('https://nominatim.openstreetmap.org/search');
   url.search = new URLSearchParams({ q, format: 'jsonv2', limit: '8', 'accept-language': 'en' }).toString();
-  if (/^[a-z]{2}$/.test(country)) url.searchParams.set('countrycodes', country);
+  if (/^[a-z]{2}(,[a-z]{2})*$/.test(country)) url.searchParams.set('countrycodes', country);
   try {
     const r = await fetch(url, {
       headers: { 'User-Agent': 'ProjectLeather/2.0 (personal photo portfolio)' },

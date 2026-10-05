@@ -231,7 +231,9 @@ export default function Globe({ unlocked, revealAll = false, view = 'day', onOpe
       }
       let sub = u ? `${photos(u.count)} · click to open` : 'locked · click to unlock';
       if (u && hasProvinces(country.iso)) sub = `${photos(u.count)} in ${u.provinces.length} ${u.provinces.length === 1 ? 'place' : 'places'} · click to open`;
-      return `<div class="globe-tip"><b>${flagHtml(country)} ${country.name}</b><span>${sub}</span></div>`;
+      // A territory names its country: "French Guiana · France".
+      const parent = getCountry(country.parent)?.name;
+      return `<div class="globe-tip"><b>${flagHtml(country)} ${country.name}</b><span>${parent ? `${parent} · ` : ''}${sub}</span></div>`;
     },
     [unlocked],
   );
