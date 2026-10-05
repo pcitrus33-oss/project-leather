@@ -40,8 +40,6 @@
   bottom: 0;
   left: 0;
   right: 0;
-  width: min(820px, 100%);
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   border-bottom: none;
@@ -90,6 +88,24 @@
   padding: 0 36px 32px;
   display: flex;
   flex-direction: column;
+}
+/* Each country as a full-width landscape cover with its name centred underneath */
+.countries-sheet .place-row {
+  flex-direction: column;
+  gap: 18px;
+  padding: 28px 0;
+  text-align: center;
+}
+.countries-sheet .place-row img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+.countries-sheet .place-row-text {
+  align-items: center;
+}
+.countries-sheet .place-row-go {
+  display: none;
 }
 .countries-sheet-empty {
   text-align: center;
