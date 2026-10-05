@@ -72,9 +72,15 @@ export function buildLandMesh<T extends Region>(regions: T[], alt: number, borde
       add(sides!, range.side);
       for (const ring of coords) {
         for (let i = 1; i < ring.length; i++) {
-          for (const [lng, lat] of [ring[i - 1], ring[i]]) {
-            toVector(lat, lng, alt + 0.0005, v);
-            borders.push(v.x, v.y, v.z);
+          // Split long edges (the 49th parallel is one 27° edge) like the tops, so the line follows the curve.
+          const [[x0, y0], [x1, y1]] = [ring[i - 1], ring[i]];
+          // (Edges jumping across the date line stay one segment, or they'd wrap round the globe.)
+          const steps = Math.abs(x1 - x0) > 180 ? 1 : Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3);
+          for (let s = 0; s < steps; s++) {
+            for (const t of [s / steps, (s + 1) / steps]) {
+              toVector(y0 + (y1 - y0) * t, x0 + (x1 - x0) * t, alt + 0.0005, v);
+              borders.push(v.x, v.y, v.z);
+            }
           }
         }
       }
