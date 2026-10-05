@@ -89,16 +89,25 @@
   display: flex;
   flex-direction: column;
 }
-/* Each country as a full-width landscape cover with its name centred underneath */
+/*
+ * Each country as a landscape cover with its name centred underneath, sized from the list's visible
+ * height (cqh): one centred country has the view to itself, and with a photo at the top most of the
+ * next one shows below.
+ */
+.countries-sheet-list {
+  container-type: size;
+}
 .countries-sheet .place-row {
   flex-direction: column;
   gap: 18px;
-  padding: 28px 0;
+  padding: 16cqh 0;
+  border: none;
   text-align: center;
 }
 .countries-sheet .place-row img {
-  width: 100%;
-  height: auto;
+  width: auto;
+  max-width: 100%;
+  height: 30cqh;
   aspect-ratio: 16 / 9;
 }
 .countries-sheet .place-row-text {
